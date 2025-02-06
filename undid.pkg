@@ -1,0 +1,22 @@
+d 'UNDID': Difference-in-differences with unpoolable data
+d 
+d A framework for estimating difference-in-differences with unpoolable data, based on Karim, Webb, Austin, and Strumpf (2024)
+d <doi:10.48550/arXiv.2403.15910>. Supports common or staggered adoption, multiple groups, and the inclusion of covariates.
+d Also computes p-values for the aggregate average treatment effect on the treated via the randomization inference procedure
+d described in MacKinnon and Webb (2020) <doi:10.1016/j.jeconom.2020.04.024>.
+d
+d
+d KW: undid
+d KW: unpoolable data
+d KW: difference in differences
+d
+d
+d Requires: Stata 16 or later
+d
+d Author: Eric Jamieson
+d Support: ericbrucejamieson@gmail.com
+d 
+d
+f package_functions/setup_functions/_undid_env.ado
+f package_functions/stage_one/create_init_csv.ado
+f package_functions/stage_one/create_diff_df.ado

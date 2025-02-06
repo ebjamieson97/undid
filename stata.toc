@@ -1,0 +1,4 @@
+v 3
+p undid Difference-in-differences with unpoolable data
+p create_init_csv Creates the init.csv
+p create_diff_df Creates the empty_diff_df.csv
