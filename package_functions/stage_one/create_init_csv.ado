@@ -18,7 +18,7 @@ program define create_init_csv
     // If no filepath given, suggest current working directory
     if "`filepath'" == "" {
         local filepath "`c(pwd)'"
-        di as error "Error: Please enter a valid filepath such as: `filepath'"
+        di as error "Error: Please enter a valid filepath to save the CSV such as: `filepath'"
         exit 2
     }
 
@@ -44,18 +44,32 @@ program define create_init_csv
         exit 4
     }
 
-    // Check that at least one treatment_time is "control"
+    // Check that at least one treatment_time is "control" and one is not "control"
     local found_control = 0
+    local found_treated = 0
     forval i = 1/`ntreat' {
-        if lower(word("`treatment_times'", `i')) == "control" {
+        local current_value = lower(word("`treatment_times'", `i'))
+        if "`current_value'" == "control"  {
             local found_control = 1
-            continue, break  // Stop checking after finding one
+            continue, break
         }
     }
     if `found_control' == 0 {
         di as error "Error: At least one treatment_time must be 'control'."
         exit 5
     }
+    forval i = 1/`ntreat' {
+        local current_value = lower(word("`treatment_times'", `i'))
+        if "`current_value'" != "control" {
+            local found_treated = 1
+            continue, break
+        }
+    }
+    if `found_treated' == 0 {
+        di as error "Error: At least one treatment_time must be a non 'control' entry."
+        exit 6
+    }
+
 
     // Open a new frame for storing data
     cap frame drop init_data
@@ -76,7 +90,7 @@ program define create_init_csv
         replace silo_name = word("`silo_names'", `i') in `i'
         replace start_time = word("`start_times'", `i') in `i'
         replace end_time = word("`end_times'", `i') in `i'
-        replace treatment_time = word("`treatment_times'", `i') in `i'
+        replace treatment_time = lower(word("`treatment_times'", `i')) in `i'
     }
 
     // Handle optional covariates

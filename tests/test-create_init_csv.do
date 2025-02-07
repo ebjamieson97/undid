@@ -39,8 +39,8 @@ if _rc {
 create_init_csv , silo_names("silo1 silo2") ///
                    start_times("2024-01-01 2024-02-01") ///
                    end_times("2024-12-31 2024-12-31") ///
-                   treatment_times("control 2024-07-01") ///
+                   treatment_times("control 2024-12-31") ///
 				   filepath("`c(pwd)'") ///
 				   filename("newinit.csv") ///
-				   covariates("black asian male")
+				   covariates("black asian")
  

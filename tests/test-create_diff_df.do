@@ -5,15 +5,26 @@ set more off
 /*-----------TEST TEST TEST-----------*/
 /*----------create_diff_df------------*/
 /*-----------TEST TEST TEST-----------*/
-/*-------version 1.0.0 2025-02-06-----*/
+/*-------version 1.0.0 2025-02-07-----*/
 /* exit 2: PASSING -------------------*/
 /* exit 3: PASSING -------------------*/
 /* exit 4: PASSING -------------------*/
 /* exit 5: PASSING -------------------*/
+/* exit 6: PASSING -------------------*/
+/* exit 7: PASSING -------------------*/
+/* exit 8: PASSING -------------------*/
+/* exit 9: PASSING -------------------*/
+/* exit 10: PASSING ------------------*/
+/* COVARIATE PROCESSING: PASSING -----*/
+/* exit 11: PASSING ------------------*/
+/* exit 12: PASSING ------------------*/
+/* exit 13: PASSING ------------------*/
+/* exit 14: PASSING ------------------*/
+
 /*------------------------------------*/
 
 * ---------------------------------------------- *
-* Step 1: Uninstall existing package (if installed)
+* Step 1: Uninstall existing package 
 * ---------------------------------------------- *
 cap ado uninstall undid
 if _rc == 0 {
@@ -39,4 +50,4 @@ if _rc {
 * ensure outputted csv files and frames are correct
 * ---------------------------------------------- *
 
-create_diff_df , init_filepath("test_csv_files/init_vary_format_end.csv") date_format("yyyy") freq("yearly") 
+create_diff_df , init_filepath("test_csv_files/init_covariates.csv") date_format("yyyy") freq("yearly") filepath("`c(pwd)'")

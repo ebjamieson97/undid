@@ -13,6 +13,7 @@ program define _undid_env
     global UNDID_STAGGERED_COLUMNS "silo_name gvar treat diff_times gt diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq RI start_time end_time"
     global UNDID_COMMON_COLUMNS "silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq"
     global UNDID_INTERPOLATION_OPTIONS "linear_function nearest_value piecewise_linear"
+    global UNDID_WEIGHTS "standard"
 end
 /*--------------------------------------*/
 /* Change Log */
