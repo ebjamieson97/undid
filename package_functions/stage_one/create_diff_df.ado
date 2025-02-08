@@ -165,6 +165,8 @@ program define create_diff_df
     // ---------------------------------------------------------------------------------------- // 
 
     // Convert start_time and end_time to dates
+    _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_2)
+    _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_2)
 
 
 

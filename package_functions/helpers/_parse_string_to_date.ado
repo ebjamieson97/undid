@@ -6,7 +6,7 @@
 cap program drop _parse_string_to_date
 program define _parse_string_to_date
     version 16
-    syntax varname(string) date_format(string) newvar(name)
+    syntax, varname(name) date_format(string) newvar(name)
 
     // Copy input to avoid modifying the original data
     gen str20 fixed_date = `varname'
