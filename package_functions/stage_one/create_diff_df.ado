@@ -216,6 +216,7 @@ program define create_diff_df
     }
     else if `num_unique_treatment_dates' > 1 {
         // Staggered Adoption
+        
 
     }
 
