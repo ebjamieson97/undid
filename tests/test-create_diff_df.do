@@ -5,7 +5,7 @@ set more off
 /*-----------TEST TEST TEST-----------*/
 /*----------create_diff_df------------*/
 /*-----------TEST TEST TEST-----------*/
-/*-------version 1.0.0 2025-02-07-----*/
+/*-------version 1.0.0 2025-02-10-----*/
 /* exit 2: PASSING -------------------*/
 /* exit 3: PASSING -------------------*/
 /* exit 4: PASSING -------------------*/
@@ -20,6 +20,11 @@ set more off
 /* exit 12: PASSING ------------------*/
 /* exit 13: PASSING ------------------*/
 /* exit 14: PASSING ------------------*/
+/* exit 15: PASSING ------------------*/
+/* COMMON ADOPTION:  ----------*/
+/* STAGGERED ADOPTION:  ----------*/
+
+
 
 /*------------------------------------*/
 
@@ -50,4 +55,4 @@ if _rc {
 * ensure outputted csv files and frames are correct
 * ---------------------------------------------- *
 
-create_diff_df , init_filepath("test_csv_files/init_covariates.csv") date_format("yyyy") freq("yearly") filepath("`c(pwd)'")
+create_diff_df , init_filepath("test_csv_files/init.csv") date_format("yyyy") freq("years") filepath("`c(pwd)'") freq_multiplier(1)

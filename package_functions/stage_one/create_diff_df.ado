@@ -129,16 +129,23 @@ program define create_diff_df
         }
     }
 
-    // Ensure freq_multiplier > 0 
+    // Ensure freq_multiplier > 0, append or delete letter s to freq if necessary
     if `freq_multiplier' < 1 {
         di as error "Error: freq_multiplier must be entered as an integer > 0."
         exit 11
     }
+    if `freq_multiplier' > 1 & substr("`freq'", -1, 1) != "s" {
+        local freq "`freq's"
+    }
+    if `freq_multiplier' == 1 & substr("`freq'", -1, 1) == "s" {
+        local freq = substr("`freq'", 1, strlen("`freq'") - 1)
+    }
 
-    // ensure date_format and weights are defined in the env
+    // ensure date_format, weights, and freq are defined in the env
     _undid_env
     local found_date_format = 0
     local found_weights = 0
+    local found_freq = 0
     foreach format in $UNDID_DATE_FORMATS {
         if "`date_format'" == "`format'" {
             local found_date_format = 1
@@ -159,14 +166,59 @@ program define create_diff_df
         di as error "Error: The weight (`weights') is not recognized. Must be one of: $UNDID_WEIGHTS."
         exit 13
     }
+    foreach freq_format in $UNDID_FREQ {
+        if "`freq'" == "`freq_format'" {
+            local found_freq = 1
+            continue, break
+        }
+    }
+    if `found_freq' == 0 {
+        di as error "Error: The freq (`freq') is not recognized. Must be one of: $UNDID_FREQ."
+        exit 15
+    }
+    local freq_string "`freq_multiplier' `freq'"
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------------- PART TWO: Processing -------------------------------- // 
     // ---------------------------------------------------------------------------------------- // 
 
     // Convert start_time and end_time to dates
-    _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_2)
-    _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_2)
+    _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_date)
+    _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_date)
+
+    // Count number of unique treatment dates and proceed accordingly
+    preserve
+    contract treatment_time if treatment_time != "control"
+    local num_unique_treatment_dates = _N
+    restore
+    if `num_unique_treatment_dates' == 1 {
+        // Common Adoption
+        qui gen treat = (treatment_time != "control")
+        qui levelsof treatment_time if treatment_time != "control", local(unique_treatment_time)
+        qui gen common_treatment_time = `unique_treatment_time'
+        qui gen weights = "`weights'"
+        qui gen diff_estimate = "NA"
+        qui gen diff_var = "NA"
+        qui gen diff_estimate_covariates = "NA"
+        qui gen diff_var_covariates = "NA"
+        qui gen date_format = "`date_format'"
+        qui gen freq = "`freq_string'"
+        cap confirm variable covariates
+        if _rc {
+            gen covariates = "none"
+        }
+        qui replace start_time = string(start_time_date, "%tdCCYY-NN-DD")
+        qui replace end_time = string(end_time_date, "%tdCCYY-NN-DD")
+        qui drop start_time_date
+        qui drop end_time_date
+        qui drop treatment_time
+        qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+    }
+    else if `num_unique_treatment_dates' > 1 {
+        // Staggered Adoption
+
+    }
+
 
 
 

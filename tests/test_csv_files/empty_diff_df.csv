@@ -1,0 +1,5 @@
+silo_name,treat,common_treatment_time,start_time,end_time,weights,diff_estimate,diff_var,diff_estimate_covariates,diff_var_covariates,covariates,date_format,freq
+73,0,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,none,yyyy,1 year
+46,0,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,none,yyyy,1 year
+71,1,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,none,yyyy,1 year
+58,1,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,none,yyyy,1 year
