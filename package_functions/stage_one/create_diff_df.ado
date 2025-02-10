@@ -14,6 +14,11 @@ program define create_diff_df
     // ---------------------------------- PART ONE: Checks ------------------------------------ // 
     // ---------------------------------------------------------------------------------------- // 
 
+    // Define UNDID variables
+    local UNDID_DATE_FORMATS "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
+    local UNDID_WEIGHTS "standard"
+    local UNDID_FREQ "year month week day years months weeks days"
+
     // Define default values
     if missing("`filename'") local filename "empty_diff_df.csv"
     if missing("`weights'") local weights "standard"
@@ -29,7 +34,15 @@ program define create_diff_df
         exit 2
     }
 
+    // Normalize filepath to always use `/` as the separator
+    local filepath_fixed = subinstr("`filepath'", "\", "/", .)
+    local fullpath "`filepath_fixed'/`filename'"
+
     // Read the init.csv file with all string columns
+    tempname empty_diff_df  
+    cap frame drop `empty_diff_df'  
+    frame create `empty_diff_df'
+    frame change `empty_diff_df'
     qui import delimited "`init_filepath'", clear stringcols(_all)
 
     // Check for missing values in all columns
@@ -141,12 +154,11 @@ program define create_diff_df
         local freq = substr("`freq'", 1, strlen("`freq'") - 1)
     }
 
-    // ensure date_format, weights, and freq are defined in the env
-    _undid_env
+    // Ensure date_format, weights, and freq are defined in the env
     local found_date_format = 0
     local found_weights = 0
     local found_freq = 0
-    foreach format in $UNDID_DATE_FORMATS {
+    foreach format in `UNDID_DATE_FORMATS' {
         if "`date_format'" == "`format'" {
             local found_date_format = 1
             continue, break
@@ -156,7 +168,7 @@ program define create_diff_df
         di as error "Error: The date_format (`date_format') is not recognized. Must be one of: $UNDID_DATE_FORMATS."
         exit 12
     }
-    foreach weight in $UNDID_WEIGHTS {
+    foreach weight in `UNDID_WEIGHTS' {
         if "`weights'" == "`weight'" {
             local found_weights = 1
             continue, break
@@ -166,7 +178,7 @@ program define create_diff_df
         di as error "Error: The weight (`weights') is not recognized. Must be one of: $UNDID_WEIGHTS."
         exit 13
     }
-    foreach freq_format in $UNDID_FREQ {
+    foreach freq_format in `UNDID_FREQ' {
         if "`freq'" == "`freq_format'" {
             local found_freq = 1
             continue, break
@@ -213,6 +225,8 @@ program define create_diff_df
         qui drop end_time_date
         qui drop treatment_time
         qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        export delimited using "`fullpath'", replace
+        frame change default
     }
     else if `num_unique_treatment_dates' > 1 {
         // Staggered Adoption

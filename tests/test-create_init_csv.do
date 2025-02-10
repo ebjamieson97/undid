@@ -42,5 +42,5 @@ create_init_csv , silo_names("silo1 silo2") ///
                    treatment_times("control 2024-12-31") ///
 				   filepath("`c(pwd)'") ///
 				   filename("newinit.csv") ///
-				   covariates("black asian")
+				   covariates("asian black male")
  

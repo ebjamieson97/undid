@@ -72,9 +72,10 @@ program define create_init_csv
 
 
     // Open a new frame for storing data
-    cap frame drop init_data
-    frame create init_data
-    frame change init_data
+    tempname init_data
+    cap frame drop `init_data'
+    frame create `init_data'
+    frame change `init_data'
 
     // Set the number of observations
     set obs `nsilo'
@@ -104,7 +105,6 @@ program define create_init_csv
         replace covariates = "`covariates_combined'"
     }
     
-
     // Export as CSV
     export delimited using "`fullpath'", replace
 
@@ -112,6 +112,7 @@ program define create_init_csv
     frame change default
 
     di as result "CSV file saved at: `fullpath'"
+    
 end
 
 /*--------------------------------------*/
