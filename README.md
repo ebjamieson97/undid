@@ -16,16 +16,6 @@ net install undid, from("https://raw.githubusercontent.com/ebjamieson97/undid/ma
 ## Requirements
 * **Stata**: Version 16 or later
 
-## Utility Commands
-
-#### 1. `checkundidversion`
-
-Displays the currently installed and the latest version of the Undid.jl package. If Undid.jl is not installed, installs Undid.jl.
-
-#### 2. `updateundid`
-
-Updates Undid.jl to the latest version if Undid.jl is already installed.
-
 ## Stage One: Initialize
 
 #### 3. `create_init_csv` - Creates an initial .csv file (init.csv), displays its filepath, and returns its contents to the active Stata dataset.
