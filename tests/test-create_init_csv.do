@@ -37,10 +37,8 @@ if _rc {
 * ensure outputted csv files and frames are correct
 * ---------------------------------------------- *
 create_init_csv , silo_names("silo1 silo2") ///
-                   start_times("2024-01-01 2024-02-01") ///
-                   end_times("2024-12-31 2024-12-31") ///
-                   treatment_times("control 2024-12-31") ///
-				   filepath("`c(pwd)'") ///
-				   filename("newinit.csv") ///
-				   covariates("asian black male")
+                   start_times("2020") ///
+                   end_times("2024") ///
+                   treatment_times("control 2022") ///
+				   filepath("`c(pwd)'")
  

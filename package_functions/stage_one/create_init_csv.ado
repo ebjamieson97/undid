@@ -15,34 +15,45 @@ program define create_init_csv
         local filename "init.csv"
     }
 
-    // If no filepath given, suggest current working directory
+    // If no filepath given, set to tempdir
     if "`filepath'" == "" {
-        local filepath "`c(pwd)'"
-        di as error "Error: Please enter a valid filepath to save the CSV such as: `filepath'"
-        exit 2
+        local filepath "`c(tmpdir)'"
     }
 
     // Normalize filepath to always use `/` as the separator
     local filepath_fixed = subinstr("`filepath'", "\", "/", .)
     local fullpath "`filepath_fixed'/`filename'"
+    local fullpath = subinstr("`fullpath'", "//", "/", .)
 
     // Split input strings into lists
     local nsilo : list sizeof silo_names
     local nstart : list sizeof start_times
     local nend : list sizeof end_times
     local ntreat : list sizeof treatment_times
-
-    // Ensure required columns have the same length
-    if (`nsilo' != `nstart' | `nsilo' != `nend' | `nsilo' != `ntreat') {
-        di as error "Error: silo_names, start_times, end_times, and treatment_times must have the same number of elements."
-        exit 3
-    }
-
+    
     // Ensure at least two silos
     if (`nsilo' < 2) {
         di as error "Error: UNDID requires at least two silos!"
-        exit 4
+        exit 3
     }
+
+    // Repeat start_times and end_times if they only have one value
+    if (`nstart' == 1) {
+        local single_start : word 1 of `start_times'
+        local start_times
+        forvalues i = 1/`nsilo' {
+            local start_times "`start_times' `single_start'"
+        }
+    }
+    if (`nend' == 1) {
+        local single_end : word 1 of `end_times'
+        local end_times
+        forvalues i = 1/`nsilo' {
+            local end_times "`end_times' `single_end'"
+        }
+    }
+    local nstart : list sizeof start_times
+    local nend : list sizeof end_times
 
     // Check that at least one treatment_time is "control" and one is not "control"
     local found_control = 0
@@ -56,7 +67,7 @@ program define create_init_csv
     }
     if `found_control' == 0 {
         di as error "Error: At least one treatment_time must be 'control'."
-        exit 5
+        exit 4
     }
     forval i = 1/`ntreat' {
         local current_value = lower(word("`treatment_times'", `i'))
@@ -67,9 +78,8 @@ program define create_init_csv
     }
     if `found_treated' == 0 {
         di as error "Error: At least one treatment_time must be a non 'control' entry."
-        exit 6
+        exit 5
     }
-
 
     // Open a new frame for storing data
     tempname init_data
@@ -78,40 +88,47 @@ program define create_init_csv
     frame change `init_data'
 
     // Set the number of observations
-    set obs `nsilo'
+    qui set obs `nsilo'
     
     // Create variables
-    gen silo_name = ""
-    gen start_time = ""
-    gen end_time = ""
-    gen treatment_time = ""
+    qui gen silo_name = ""
+    qui gen start_time = ""
+    qui gen end_time = ""
+    qui gen treatment_time = ""
 
     // Populate the data row by row
     forval i = 1/`nsilo' {
-        replace silo_name = word("`silo_names'", `i') in `i'
-        replace start_time = word("`start_times'", `i') in `i'
-        replace end_time = word("`end_times'", `i') in `i'
-        replace treatment_time = lower(word("`treatment_times'", `i')) in `i'
+        qui replace silo_name = word("`silo_names'", `i') in `i'
+        qui replace start_time = word("`start_times'", `i') in `i'
+        qui replace end_time = word("`end_times'", `i') in `i'
+        qui replace treatment_time = lower(word("`treatment_times'", `i')) in `i'
     }
 
     // Handle optional covariates
     if "`covariates'" != "" {
-        gen covariates = ""
+        qui gen covariates = ""
 
         // Convert covariates into a single semicolon-separated string
         local covariates_combined = subinstr("`covariates'", " ", ";", .)
 
         // Copy and paste to all rows
-        replace covariates = "`covariates_combined'"
+        qui replace covariates = "`covariates_combined'"
     }
     
     // Export as CSV
-    export delimited using "`fullpath'", replace
+    qui export delimited using "`fullpath'", replace
 
     // Return to default frame
     frame change default
 
-    di as result "CSV file saved at: `fullpath'"
+    // Convert to Windows-friendly format for display if on Windows
+    if "`c(os)'" == "Windows" {
+        local fullpath_display = subinstr("`fullpath'", "/", "\", .)
+    } 
+    else {
+        local fullpath_display "`fullpath'"
+    }
+    di as result "`filename' file saved to: `fullpath_display'"
     
 end
 

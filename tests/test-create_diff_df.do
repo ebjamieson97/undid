@@ -55,4 +55,4 @@ if _rc {
 * ensure outputted csv files and frames are correct
 * ---------------------------------------------- *
 
-create_diff_df , init_filepath("test_csv_files/init.csv") date_format("yyyy") freq("years") filepath("`c(pwd)'") freq_multiplier(1)
+create_diff_df , init_filepath("test_csv_files\\init.csv") date_format("yyyy") freq("years") freq_multiplier(1) filepath("`c(pwd)'")

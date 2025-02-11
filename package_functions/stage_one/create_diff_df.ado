@@ -29,14 +29,13 @@ program define create_diff_df
     
     // If no filepath given, suggest current working directory
     if "`filepath'" == "" {
-        local filepath "`c(pwd)'"
-        di as error "Error: Please enter a valid filepath to save the CSV such as: `filepath'"
-        exit 2
+        local filepath "`c(tmpdir)'"
     }
 
     // Normalize filepath to always use `/` as the separator
     local filepath_fixed = subinstr("`filepath'", "\", "/", .)
     local fullpath "`filepath_fixed'/`filename'"
+    local fullpath = subinstr("`fullpath'", "//", "/", .)
 
     // Read the init.csv file with all string columns
     tempname empty_diff_df  
@@ -46,7 +45,7 @@ program define create_diff_df
     qui import delimited "`init_filepath'", clear stringcols(_all)
 
     // Check for missing values in all columns
-    ds
+    qui ds
     foreach var in `r(varlist)' {
         cap assert !missing(`var')
         if _rc {
@@ -57,7 +56,7 @@ program define create_diff_df
 
     // Make sure freq and treatment_time are lowercase
     qui replace treatment_time = lower(treatment_time)
-    qui local freq = lower("`freq'")
+    local freq = lower("`freq'")
 
     // Trim any whitespace from start_time and end_time
     qui replace start_time = trim(start_time)
@@ -135,10 +134,10 @@ program define create_diff_df
         local formatted_covariates = subinstr("`covariates'", " ", ";", .)
         cap confirm variable covariates
         if _rc { 
-            gen covariates = "`formatted_covariates'"
+            qui gen covariates = "`formatted_covariates'"
         }
         else {
-            replace covariates = "`formatted_covariates'"
+            qui replace covariates = "`formatted_covariates'"
         }
     }
 
@@ -195,14 +194,14 @@ program define create_diff_df
     // ---------------------------------------------------------------------------------------- // 
 
     // Convert start_time and end_time to dates
-    _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_date)
-    _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_date)
+    qui _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_date)
+    qui _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_date)
 
     // Count number of unique treatment dates and proceed accordingly
-    preserve
-    contract treatment_time if treatment_time != "control"
+    qui preserve
+    qui contract treatment_time if treatment_time != "control"
     local num_unique_treatment_dates = _N
-    restore
+    qui restore
     if `num_unique_treatment_dates' == 1 {
         // Common Adoption
         qui gen treat = (treatment_time != "control")
@@ -217,7 +216,7 @@ program define create_diff_df
         qui gen freq = "`freq_string'"
         cap confirm variable covariates
         if _rc {
-            gen covariates = "none"
+            qui gen covariates = "none"
         }
         qui replace start_time = string(start_time_date, "%tdCCYY-NN-DD")
         qui replace end_time = string(end_time_date, "%tdCCYY-NN-DD")
@@ -225,7 +224,7 @@ program define create_diff_df
         qui drop end_time_date
         qui drop treatment_time
         qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
-        export delimited using "`fullpath'", replace
+        qui export delimited using "`fullpath'", replace
         frame change default
     }
     else if `num_unique_treatment_dates' > 1 {
@@ -234,9 +233,14 @@ program define create_diff_df
 
     }
 
-
-
-
+    // Convert to Windows-friendly format for display if on Windows
+    if "`c(os)'" == "Windows" {
+        local fullpath_display = subinstr("`fullpath'", "/", "\", .)
+    } 
+    else {
+        local fullpath_display "`fullpath'"
+    }
+    di as result "`filename' file saved to: `fullpath_display'"
 
 end
 
