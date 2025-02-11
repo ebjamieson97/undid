@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*create_diff_df*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-06 */
+/*version 1.0.0 2025-02-11 */
 /*------------------------------------*/
 cap program drop create_diff_df
 program define create_diff_df
@@ -15,7 +15,7 @@ program define create_diff_df
     // ---------------------------------------------------------------------------------------- // 
 
     // Define UNDID variables
-    local UNDID_DATE_FORMATS "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
+    local UNDID_DATE_FORMATS "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy ddmmyyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
     local UNDID_WEIGHTS "standard"
     local UNDID_FREQ "year month week day years months weeks days"
 
