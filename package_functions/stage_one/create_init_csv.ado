@@ -104,6 +104,20 @@ program define create_init_csv
         qui replace treatment_time = lower(word("`treatment_times'", `i')) in `i'
     }
 
+    // Check that there is just on inputted start_time and end_time 
+    levelsof start_time, local(unique_vals_start)
+    local num_vals_start: word count `unique_vals_start'
+    if `num_vals_start' > 1 {
+        di as error "Error: More than one unique start_time value found. Please specify a single commont start time for the analysis."
+        exit 6
+    }
+    levelsof end_time, local(unique_vals_end)
+    local num_vals_end: word count `unique_vals_end'
+    if `num_vals_end' > 1 {
+        di as error "Error: More than one unique end_time value found. Please specify a single commont end time for the analysis."
+        exit 7
+    }
+
     // Handle optional covariates
     if "`covariates'" != "" {
         qui gen covariates = ""

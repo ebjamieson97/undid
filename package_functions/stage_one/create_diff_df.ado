@@ -124,6 +124,20 @@ program define create_diff_df
     qui drop end_length
     qui drop treatment_length
 
+    // Check that there is just on inputted start_time and end_time 
+    levelsof start_time, local(unique_vals_start)
+    local num_vals_start: word count `unique_vals_start'
+    if `num_vals_start' > 1 {
+        di as error "Error: More than one unique start_time value found. Please specify a single commont start time for the analysis."
+        exit 16
+    }
+    levelsof end_time, local(unique_vals_end)
+    local num_vals_end: word count `unique_vals_end'
+    if `num_vals_end' > 1 {
+        di as error "Error: More than one unique end_time value found. Please specify a single commont end time for the analysis."
+        exit 17
+    }
+
     // If covariates are specified, process them
     if "`covariates'" != "" {
         local covariates_trimmed_length = strlen(trim("`covariates'"))
@@ -196,6 +210,8 @@ program define create_diff_df
     // Convert start_time and end_time to dates
     qui _parse_string_to_date, varname(start_time) date_format("`date_format'") newvar(start_time_date)
     qui _parse_string_to_date, varname(end_time) date_format("`date_format'") newvar(end_time_date)
+
+
 
     // Count number of unique treatment dates and proceed accordingly
     qui preserve

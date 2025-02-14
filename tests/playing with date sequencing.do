@@ -1,4 +1,5 @@
 frame change default
+frame drop seq_frame
 clear
 import delimited "test_csv_files/init_staggered.csv", clear stringcols(_all)
 
@@ -8,7 +9,7 @@ _parse_string_to_date, varname(treatment_time) date_format("yyyy") newvar(treatm
 
 frame create seq_frame str20 silo_name gvar t pre treat RI
 
-local freq_string = "40 months"
+local freq_string = "1 year"
 
 // Extract numeric value and unit from freq_string
 local num = real(word("`freq_string'", 1))

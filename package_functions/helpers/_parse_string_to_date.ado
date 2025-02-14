@@ -42,9 +42,6 @@ program define _parse_string_to_date
     else if "`date_format'" == "yyyy-dd-mm" {
         qui replace fixed_date = substr(fixed_date,1,4) + "/" + substr(fixed_date,9,2) + "/" + substr(fixed_date,6,2)
     }
-    else if "`date_format'" == "yyyyddmm" {
-        qui replace fixed_date = substr(fixed_date,1,4) + "/" + substr(fixed_date,7,2) + "/" + substr(fixed_date,5,2)
-    }
     else if "`date_format'" == "yyyy-mm-dd" {
         qui replace fixed_date = substr(fixed_date,1,4) + "/" + substr(fixed_date,6,2) + "/" + substr(fixed_date,9,2)
     }
