@@ -26,7 +26,7 @@ Control silos should be marked with `"control"` in the `treatment_times` argumen
 
 Covariates may be specified when calling `create_init_csv` or when calling `create_diff_df`.
 
-Ensure that dates are all entered in the same date format, a list of compatible date formats can be seen [here.](#valid-date-formats)
+Ensure that dates are all entered in the same date format, a list of compatible date formats can be seen [here.](#compatible-date-formats)
 
 **Parameters:**
 
@@ -49,7 +49,7 @@ Ensure that dates are all entered in the same date format, a list of compatible 
   A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
 
 - **filepath** (*string, optional*):  
-  A string specifying the path to the folder in which to save the output file, e.g. `"`c(pwd)'"`. Defaults to `"`c(tempdir)'"`.
+  A string specifying the path to the folder in which to save the output file. e.g. `` "`c(pwd)'" ``. Defaults to `` "`c(tempdir)'" ``
 
 ```stata
 * Using a subset of data from the merit scholarship example shown in https://arxiv.org/abs/2403.15910
@@ -69,7 +69,7 @@ Creates the `empty_diff_df.csv` which lists all of the differences that need to 
   A string specifying the filepath to the `init.csv`.
   
 - **date_format** (*string*):  
-  A string which specifies the [date format](#valid-date-formats) used in the `init.csv`. 
+  A string which specifies the [date format](#compatible-date-formats) used in the `init.csv`. 
 
 - **freq** (*string*):  
   A string which indicates the length of the time periods to be used when computing the differences in mean outcomes between periods at each silo and the length of a period for the trends data. Options are:
@@ -89,7 +89,7 @@ Creates the `empty_diff_df.csv` which lists all of the differences that need to 
   A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
 
 - **filepath** (*string, optional*):  
-  A string specifying the path to the folder in which to save the output file, e.g. `"`c(pwd)'"`. Defaults to `"`c(tempdir)'"`.
+  A string specifying the path to the folder in which to save the output file, e.g. `` "`c(pwd)'" ``. Defaults to `` "`c(tempdir)'" ``.
 
 ```stata
 create_diff_df, filepath("C:/Users/User/Documents/Project Files/init.csv") date_format("yyyy") freq("year")
@@ -125,7 +125,7 @@ Ensure that the local silo data is loaded as Stata's active dataset before runni
   A string specifying the name of the variable in the local silo data which contains the outcome of interest.
 
 - **local_date_format** (*string, required*):  
-  A string specifying the [date format](#valid-date-formats) used in the `time_column` variable. 
+  A string specifying the [date format](#compatible-date-formats) used in the `time_column` variable. 
   
 - **consider_covariates** (*string, optional*):  
   A string which if set to `"false"` ignores computations involving the covariates specified in the `empty_diff_df.csv`. Defaults to `"true"`. 
@@ -248,7 +248,7 @@ plot_parallel_trends, folder("C:/Users/User/Documents/Files From Silos") outcome
 
 ### Appendix
 
-#### Valid Date Formats
+#### Compatible Date Formats
 - `ddmonyyyy` → 25aug1990
 - `yyyym00` → 1990m8
 - `yyyy/mm/dd` → 1990/08/25
@@ -263,8 +263,5 @@ plot_parallel_trends, folder("C:/Users/User/Documents/Files From Silos") outcome
 - `mm/dd/yyyy` → 08/25/1990
 - `mm-dd-yyyy` → 08-25-1990
 - `mmddyyyy` → 08251990
-- `mm/yyyy` → 08/1990
-- `mm-yyyy` → 08-1990
-- `mmyyyy` → 081990
 - `yyyy` → 1990
 
