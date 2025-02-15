@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*create_init_csv*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-06 */
+/*version 1.0.0 2025-02-15 */
 /*------------------------------------*/
 cap program drop create_init_csv
 program define create_init_csv
@@ -13,6 +13,10 @@ program define create_init_csv
     // Set default filename if not provided
     if "`filename'" == "" {
         local filename "init.csv"
+    }
+    else if substr("`filename'", -4, .) != ".csv" {
+        di as error "Error: Filename must end in .csv"
+        exit 8
     }
 
     // If no filepath given, set to tempdir
@@ -82,10 +86,10 @@ program define create_init_csv
     }
 
     // Open a new frame for storing data
-    tempname init_data
-    cap frame drop `init_data'
-    frame create `init_data'
-    frame change `init_data'
+    qui tempname init_data
+    qui cap frame drop `init_data'
+    qui frame create `init_data'
+    qui frame change `init_data'
 
     // Set the number of observations
     qui set obs `nsilo'
@@ -105,13 +109,13 @@ program define create_init_csv
     }
 
     // Check that there is just on inputted start_time and end_time 
-    levelsof start_time, local(unique_vals_start)
+    qui levelsof start_time, local(unique_vals_start)
     local num_vals_start: word count `unique_vals_start'
     if `num_vals_start' > 1 {
         di as error "Error: More than one unique start_time value found. Please specify a single commont start time for the analysis."
         exit 6
     }
-    levelsof end_time, local(unique_vals_end)
+    qui levelsof end_time, local(unique_vals_end)
     local num_vals_end: word count `unique_vals_end'
     if `num_vals_end' > 1 {
         di as error "Error: More than one unique end_time value found. Please specify a single commont end time for the analysis."

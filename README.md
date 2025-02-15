@@ -18,73 +18,83 @@ net install undid, from("https://raw.githubusercontent.com/ebjamieson97/undid/ma
 
 ## Stage One: Initialize
 
-#### 3. `create_init_csv` - Creates an initial .csv file (init.csv), displays its filepath, and returns its contents to the active Stata dataset.
+#### `create_init_csv` - Creates an initial CSV file (`init.csv`) and displays its filepath
 
-Generates an initial `.csv` file (`init.csv`) specifying the silo names, start times, end times, and treatment times. This file is then used to create the `empty_diff_df.csv`, which is sent to each silo. If `create_init_csv` is called without providing any silo names, start times, end times, or treatment times, an `init.csv` will be created with the appropriate column headers and blank columns. 
+Generates an initial CSV file (`init.csv`) specifying the silo names, start times, end times, and treatment times. This file is then used to create the `empty_diff_df.csv`, which is to be sent to each silo.
 
-Control silos should be marked with `"control"` in the `treatment_times` column.
+Control silos should be marked with `"control"` in the `treatment_times` argument.
 
 Covariates may be specified when calling `create_init_csv` or when calling `create_diff_df`.
 
-Ensure that dates are all entered in the same date format, a list of acceptable date formats can be seen [here.](#valid-date-formats)
+Ensure that dates are all entered in the same date format, a list of compatible date formats can be seen [here.](#valid-date-formats)
 
 **Parameters:**
 
-- **silo_names** (*string, optional*):  
-  A string specifying the different silo names.
+- **silo_names** (*string*):  
+  A string specifying the different silo names. Silo names should be separated by spaces, e.g. `silo_names("Ontario Quebec")`.
   
-- **start_times** (*string, optional*):  
+- **start_times** (*string*):  
   A string which indicates the starting time for the analysis at each silo.
 
-- **end_times** (*string, optional*):  
+- **end_times** (*string*):  
   A string which indicates the end time for the analysis at each silo.
 
-- **treatment_times** (*string, optional*):  
+- **treatment_times** (*string*):  
   A string which indicates the treatment time at each silo. Control silos should be labelled with the treatment time `"control"`.
 
 - **covariates** (*string, optional*):  
   A string specifying covariates to be considered at each silo.
 
+- **filename** (*string, optional*):  
+  A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
+
+- **filepath** (*string, optional*):  
+  A string specifying the path to the folder in which to save the output file, e.g. `"`c(pwd)'"`. Defaults to `"`c(tempdir)'"`.
+
 ```stata
 * Using a subset of data from the merit scholarship example shown in https://arxiv.org/abs/2403.15910
 
-. create_init_csv, silo_names("71 73 58 46") start_times("1989 1989 1989 1989") end_times("2000 2000 2000 2000") treatment_times("1991 control 1993 control") covariates("asian black male")
+create_init_csv, silo_names("71 73 58 46") start_times("1989") end_times("2000") treatment_times("1991 control 1993 control") covariates("asian black male")
 
-init.csv saved to
-C:/Users/User/Documents/Project Files/init.csv
+init.csv saved to: C:\Users\ERICBR~1\AppData\Local\Temp\init.csv
 ```
 
-#### 4. `create_diff_df` - Creates the .csv file to be sent out to each silo (empty_diff_df.csv), displays its filepath, and returns its contents to the active Stata dataset.
+#### `create_diff_df` - Creates the CSV file to be sent out to each silo (`empty_diff_df.csv`) and displays its filepath
 
-Creates the `empty_diff_df.csv` which lists all of the differences that need to calculated at each silo in order to compute the aggregate ATT. The `empty_diff_df.csv` is then sent out to each silo to be filled out.
+Creates the `empty_diff_df.csv` which lists all of the differences that need to calculated at each silo in order to compute the aggregate ATT. The `empty_diff_df.csv` is then to be sent out to each silo to be filled out.
 
 **Parameters:**
 
-- **filepath** (*string, required*):  
+- **init_filepath** (*string*):  
   A string specifying the filepath to the `init.csv`.
   
-- **date_format** (*string, required*):  
+- **date_format** (*string*):  
   A string which specifies the [date format](#valid-date-formats) used in the `init.csv`. 
 
-- **freq** (*string, required*):  
-  A string which indicates the length of the time periods to be used when computing the differences in mean outcomes between periods at each silo.
-  - "daily", "weekly", "monthly", or "yearly"
+- **freq** (*string*):  
+  A string which indicates the length of the time periods to be used when computing the differences in mean outcomes between periods at each silo and the length of a period for the trends data. Options are:
+  - `year month week day years months weeks days`
 
 - **covariates** (*string, optional*):  
   A string specifying covariates to be considered at each silo. If left blank uses covariates from `init.csv`. 
 
-- **freq_multiplier** (*integer or string, optional*):  
-  Specify if the frequency should be multiplied by a non-zero integer. For example, if the time periods to consider are two years, set `freq("yearly") freq_multiplier(2)`.
+- **freq_multiplier** (*integer, optional*):  
+  Specify if the frequency should be multiplied by a non-zero integer. For example, if the time periods to consider are two years, set `freq("years") freq_multiplier(2)`.
 
 - **weights** (*string, optional*):
   A string indicating the type of weighting to use in the case of common adoption. Defaults to "standard". Options are:
-  - "standard" weighs each silo according to (num of obs after and at the treatment period) / (num of obs)
+  - "standard" weighs each silo according to: (num of obs after and at the treatment period) / (num of obs)
+
+- **filename** (*string, optional*):  
+  A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
+
+- **filepath** (*string, optional*):  
+  A string specifying the path to the folder in which to save the output file, e.g. `"`c(pwd)'"`. Defaults to `"`c(tempdir)'"`.
 
 ```stata
-. create_diff_df, filepath("C:/Users/User/Documents/Project Files/init.csv") date_format("yyyy") freq("yearly")
+create_diff_df, filepath("C:/Users/User/Documents/Project Files/init.csv") date_format("yyyy") freq("year")
 
-empty_diff_df.csv saved to
-C:/Users/User/Documents/Project Files/empty_diff_df.csv
+empty_diff_df.csv saved to: C:\Users\ERICBR~1\AppData\Local\Temp\empty_diff_df.csv
 ```
 
 

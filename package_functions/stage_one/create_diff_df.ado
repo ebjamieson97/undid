@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*create_diff_df*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-11 */
+/*version 1.0.0 2025-02-15 */
 /*------------------------------------*/
 cap program drop create_diff_df
 program define create_diff_df
@@ -30,6 +30,16 @@ program define create_diff_df
     // If no filepath given, suggest current working directory
     if "`filepath'" == "" {
         local filepath "`c(tmpdir)'"
+    }
+    else if substr("`filename'", -4, .) != ".csv" {
+        di as error "Error: Filename must end in .csv"
+        exit 21
+    }
+
+    // Make sure the init_filepath actually goes to a CSV file
+    if substr("`init_filepath'", -4, .) != ".csv" {
+        di as error "Error: init_filepath should end in .csv"
+        exit 22
     }
 
     // Normalize filepath to always use `/` as the separator
@@ -216,10 +226,15 @@ program define create_diff_df
         di as error "Error: Found values of start_time that are after the end_time"
         exit 18
     }
-    qui capture assert start_time_date < treatment_time_date & treatment_time_date < end_time_date if !missing(treatment_time_date)
+    qui capture assert start_time_date < treatment_time_date if !missing(treatment_time_date)
     if _rc {
-        di as error "Error: Found values of treatment_time that are not between start_time and end_time."
+        di as error "Error: Found values of treatment_time that are equal to or less than start_time."
         exit 19
+    }
+    qui capture assert treatment_time_date <= end_time_date if !missing(treatment_time_date)
+    if _rc {
+        di as error "Error: Found values of treatment_time that are greater than end_time."
+        exit 20
     }
 
     // Count number of unique treatment dates and proceed accordingly
@@ -287,11 +302,11 @@ program define create_diff_df
         }
 
         // Loop through each `silo_name` to generate sequences
-        levelsof silo_name if treatment_time != "control", local(treated_silos)
-        levelsof silo_name if treatment_time == "control", local(control_silos) // Stored for later
+        qui levelsof silo_name if treatment_time != "control", local(treated_silos)
+        qui levelsof silo_name if treatment_time == "control", local(control_silos) // Stored for later
         foreach silo of local treated_silos {
             // Get the treatment time (gvar) for the silo 
-            levelsof treatment_time_date if silo_name == "`silo'", local(gvar_list)
+            qui levelsof treatment_time_date if silo_name == "`silo'", local(gvar_list)
             foreach gvar of local gvar_list {
                 local gvar_num = `gvar' // store gvar
 
@@ -310,7 +325,12 @@ program define create_diff_df
                         local pre_year = `pre_year' - 1
                     }
                     // Generate valid pre-date
-                    local pre = mdy(`pre_month', min(day(`current'), day(mdy(`pre_month', 1, `pre_year'))), `pre_year')
+                    local proposed_day = day(mdy(`pre_month', day(`current'), `pre_year'))
+                    local proposed_day_minus_one = day(mdy(`pre_month', day(`current') - 1, `pre_year'))
+                    local proposed_day_minus_two = day(mdy(`pre_month', day(`current') - 2, `pre_year'))
+                    local proposed_day_minus_three = day(mdy(`pre_month', day(`current') - 3, `pre_year'))
+                    local day_final = max(`proposed_day', `proposed_day_minus_one', `proposed_day_minus_two', `proposed_day_minus_three')
+                    local pre = mdy(`pre_month', `day_final', `pre_year')
     		    }
     		    else if "`unit'" == "years" | "`unit'" == "year" {
     		    	local pre = mdy(month(`current'), day(`current'), year(`current') - `num')
@@ -359,12 +379,12 @@ program define create_diff_df
         qui bysort gvar t (silo_name): replace unique_flag = (_n == 1) 
         qui sort silo_name gvar t 
         foreach silo of local treated_silos {
-        	levelsof gvar if silo_name == "`silo'", local(silo_gvar)
-        	levelsof gvar if silo_name != "`silo'" & gvar != `silo_gvar', local(ri_gvars)
+        	qui levelsof gvar if silo_name == "`silo'", local(silo_gvar)
+        	qui levelsof gvar if silo_name != "`silo'" & gvar != `silo_gvar', local(ri_gvars)
         	foreach ri_gvar of local ri_gvars {
                 // Get all unique (t, pre) combinations for the given gvar
-                levelsof t if gvar == `ri_gvar' & silo_name != "`silo'", local(t_list)
-                levelsof pre if gvar == `ri_gvar' & silo_name != "`silo'", local(pre_list)
+                qui levelsof t if gvar == `ri_gvar' & silo_name != "`silo'", local(t_list)
+                qui levelsof pre if gvar == `ri_gvar' & silo_name != "`silo'", local(pre_list)
 
                 foreach t_val of local t_list {
                     foreach pre_val of local pre_list {
