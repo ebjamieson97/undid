@@ -31,10 +31,15 @@ if _rc {
     exit 1
 }
 
+
+gen asdf = .
+gen fdsa = .
 * ---------------------------------------------- *
 * Step 3: Load in silo data and try variations of undid_stage_two
 * make sure proper error messages display
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
-undid_stage_two
+undid_stage_two, empty_diff_filepath("asdf") silo_name("asdf") ///
+            time_column(asdf) outcome_column(fdsa) silo_date_format("asdf") ///
+			consider_covariates(1)
  

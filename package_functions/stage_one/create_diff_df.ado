@@ -27,11 +27,13 @@ program define create_diff_df
     local date_format = trim("`date_format'")
     local freq = trim("`freq'")
     
-    // If no filepath given, suggest current working directory
+    // If no filepath given, use tempdir
     if "`filepath'" == "" {
         local filepath "`c(tmpdir)'"
     }
-    else if substr("`filename'", -4, .) != ".csv" {
+    
+    // Make sure filename ends in a .csv
+    if substr("`filename'", -4, .) != ".csv" {
         di as error "Error: Filename must end in .csv"
         exit 21
     }
@@ -45,6 +47,7 @@ program define create_diff_df
     // Normalize filepath to always use `/` as the separator
     local filepath_fixed = subinstr("`filepath'", "\", "/", .)
     local fullpath "`filepath_fixed'/`filename'"
+    local fullpath = subinstr("`fullpath'", "//", "/", .)
     local fullpath = subinstr("`fullpath'", "//", "/", .)
 
     // Read the init.csv file with all string columns

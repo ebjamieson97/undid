@@ -28,6 +28,7 @@ program define create_init_csv
     local filepath_fixed = subinstr("`filepath'", "\", "/", .)
     local fullpath "`filepath_fixed'/`filename'"
     local fullpath = subinstr("`fullpath'", "//", "/", .)
+    local fullpath = subinstr("`fullpath'", "//", "/", .)
 
     // Split input strings into lists
     local nsilo : list sizeof silo_names
