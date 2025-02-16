@@ -27,9 +27,9 @@ Optional parameters:
 
 - {bf:covariates} : A string specifying covariates to be considered at each silo.
 
-- {bf:filename} : A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
+- {bf:filename} : A string specifying the outputted filename. Must end in ".csv". Defaults to "init.csv".
 
-- {bf:filepath} : A string specifying the path to the folder in which to save the output file, e.g. `"`c(pwd)'"`. Defaults to `"`c(tempdir)'"`.
+- {bf:filepath} : A string specifying the path to the folder in which to save the output file, e.g. "`c(pwd)'". Defaults to "`c(tempdir)'".
 
 
 {title:Syntax}
@@ -39,7 +39,7 @@ Optional parameters:
 
 {title:Examples}
 
-{phang2}{cmd:create_init_csv, silo_names("71 73 58 46") start_times("1989") end_times ("2000") treatment_times("1991 control 1993 control") covariates("asian black male")}
+{phang2}{cmd:create_init_csv, silo_names("71 73 58 46") start_times("1989") end_times("2000") treatment_times("1991 control 1993 control") covariates("asian black male")}
 
 {phang2}init.csv saved to: C:\Users\ERICBR~1\AppData\Local\Temp\init.csv
 
