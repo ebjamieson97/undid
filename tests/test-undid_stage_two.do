@@ -1,13 +1,15 @@
 clear all
 set more off
+version 16
 
 /*------------------------------------*/
 /*-----------TEST TEST TEST-----------*/
 /*----------undid_stage_two-----------*/
 /*-----------TEST TEST TEST-----------*/
 /*--------------UNTESTED---------------*/
-/*-------version 1.0.0 2025-02-15-----*/
+/*-------version 1.0.0 2025-02-21-----*/
 /*------------------------------------*/
+/*EXITS 1 to 9: PASSING --------------*/
 
 
 * ---------------------------------------------- *
@@ -32,14 +34,17 @@ if _rc {
 }
 
 
-gen asdf = .
-gen fdsa = .
+
 * ---------------------------------------------- *
 * Step 3: Load in silo data and try variations of undid_stage_two
 * make sure proper error messages display
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
-undid_stage_two, empty_diff_filepath("asdf") silo_name("asdf") ///
-            time_column(asdf) outcome_column(fdsa) silo_date_format("asdf") ///
-			consider_covariates(1)
+use "test_dta_files\State71.dta", clear
+tostring year, replace
+
+undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_common.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy")
+
+
+
  

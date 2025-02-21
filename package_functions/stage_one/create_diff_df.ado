@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*create_diff_df*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-15 */
+/*version 1.0.0 2025-02-19 */
 /*------------------------------------*/
 cap program drop create_diff_df
 program define create_diff_df
@@ -191,7 +191,7 @@ program define create_diff_df
         }
     }
     if `found_date_format' == 0 {
-        di as error "Error: The date_format (`date_format') is not recognized. Must be one of: $UNDID_DATE_FORMATS."
+        di as error "Error: The date_format (`date_format') is not recognized. Must be one of: `UNDID_DATE_FORMATS'."
         exit 12
     }
     foreach weight in `UNDID_WEIGHTS' {
@@ -201,7 +201,7 @@ program define create_diff_df
         }
     }
     if `found_weights' == 0 {
-        di as error "Error: The weight (`weights') is not recognized. Must be one of: $UNDID_WEIGHTS."
+        di as error "Error: The weight (`weights') is not recognized. Must be one of: `UNDID_WEIGHTS'."
         exit 13
     }
     foreach freq_format in `UNDID_FREQ' {
@@ -211,7 +211,7 @@ program define create_diff_df
         }
     }
     if `found_freq' == 0 {
-        di as error "Error: The freq (`freq') is not recognized. Must be one of: $UNDID_FREQ."
+        di as error "Error: The freq (`freq') is not recognized. Must be one of: `UNDID_FREQ'."
         exit 15
     }
     local freq_string "`freq_multiplier' `freq'"
