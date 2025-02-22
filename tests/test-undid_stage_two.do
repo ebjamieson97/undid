@@ -7,9 +7,9 @@ version 16
 /*----------undid_stage_two-----------*/
 /*-----------TEST TEST TEST-----------*/
 /*--------------UNTESTED---------------*/
-/*-------version 1.0.0 2025-02-21-----*/
+/*-------version 1.0.0 2025-02-22-----*/
 /*------------------------------------*/
-/*EXITS 1 to 9: PASSING --------------*/
+/*EXITS 1 to 12: PASSING --------------*/
 
 
 * ---------------------------------------------- *
@@ -43,7 +43,7 @@ if _rc {
 use "test_dta_files\State71.dta", clear
 tostring year, replace
 
-undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_common.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy")
+undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy")
 
 
 

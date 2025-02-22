@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_two*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-21 */
+/*version 1.0.0 2025-02-22 */
 /*------------------------------------*/
 cap program drop undid_stage_two
 program define undid_stage_two
@@ -149,6 +149,36 @@ program define undid_stage_two
     }
 
     // Check for missing values in time_column, outcome_column and covariate columns if applicable
+    qui count if missing(`outcome_column')
+    if r(N) > 0 {
+        di as error "Error: `outcome_column' has `r(N)' missing values!"
+        exit 10
+    }
+    qui count if `time_column' == ""
+    if r(N) > 0 {
+        di as error "Error: `time_column' has `r(N)' missing values!"
+        exit 11
+    }
+    local covariate_missing_values = 0
+    if "`covariates'" != "none" {
+        forvalues i = 1/`n_covariates' {
+            local covariate : word `i' of `covariates'
+            qui count if missing(`covariate')
+            if r(N) > 0 {
+                di as error "Error: `covariate' has missing values."
+                local covariate_missing_values = 1
+            }
+        }
+    }
+    if `covariate_missing_values' == 1 {
+        di as error "Error: Encountered covariate columns with missing values."
+        exit 12
+    }
+
+    // ---------------------------------------------------------------------------------------- //
+    // ---------------------------------- PART TWO: Processing -------------------------------- // 
+    // ---------------------------------------------------------------------------------------- //
+
 
 
     // Convert to Windows-friendly format for display if on Windows
