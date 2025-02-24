@@ -97,7 +97,29 @@ program define undid_stage_two
         exit 5
     }
     qui keep if silo_name == "`silo_name'"
-    
+
+    // Convert diff_estimate, diff_var, diff_estimate_covariates, and diff_var_covariates in to numeric (double) columns with maximum precision
+    foreach var in diff_estimate diff_var diff_estimate_covariates diff_var_covariates {
+        qui replace `var' = "" if `var' == "NA" | `var' == "missing"
+        qui destring `var', replace
+        qui gen double `var'_tmp = `var'
+        qui drop `var'
+        qui gen double `var' = `var'_tmp
+        qui drop `var'_tmp
+        qui format `var' %20.15g
+    }
+
+    // Convert weight column (if it exists) to a double and store the weighting method for later
+    if `check_common' == 1 {
+        local weight = lower(weights[1])
+        qui replace weights = ""
+        qui destring weights, replace
+        qui gen double weights_tmp = weights
+        qui drop weights
+        qui gen weights = weights_tmp
+        qui drop weights_tmp
+        qui format weights %20.15g
+    }
     // Check that covariates specified in empty_diff_df exist in the silo data
     local covariates = subinstr(covariates[1], ";", " ", .)
     qui local n_covariates = wordcount("`covariates'")
@@ -190,24 +212,63 @@ program define undid_stage_two
         qui _parse_string_to_date, varname(common_treatment_time) date_format("`diff_df_date_format'") newvar(cmn_trt_date)
         qui summarize cmn_trt_date
         local trt_date = r(min)
+        qui drop cmn_trt_date
         qui frame change default
         tempvar date
         tempvar trt_indicator
         qui _parse_string_to_date, varname(`time_column') date_format("`silo_date_format'") newvar(`date')
-        qui gen trt_indicator = (`date' >= `trt_date')
-        qui count if trt_indicator == 0
+        qui gen `trt_indicator' = (`date' >= `trt_date')
+        qui count if `trt_indicator' == 0
         local count_0 = r(N)
-        qui count if trt_indicator == 1
+        qui count if `trt_indicator' == 1
         local count_1 = r(N)
         if `count_0' == 0 | `count_1' == 0 {
             di as error "Error: The local silo must have at least one obs before and after (or at) `cmn_trt_time'."
             exit 13
         }
-        qui regress `outcome_column' trt_indicator, robust
-        local coef_trt = _b[trt_indicator]
-        di as result "Coefficient on trt_indicator: `coef_trt'"
+        if "`weight'" == "standard" {
+            local weight_val = `count_1' / (`count_1' + `count_0')
+        }
+        else {
+            di as error "Error: weight indicated in empty_diff_df.csv must be one of: standard"
+            exit 14
+        }
+        qui regress `outcome_column' `trt_indicator', robust
+        local diff_estimate = _b[`trt_indicator']
+        local diff_var = e(V)[1,1]
 
         // Compute diff_estimate_covariates and diff_var_covariates
+        if "`covariates'" != "none" {
+            qui regress `outcome_column' `trt_indicator' `covariates', robust
+            local diff_estimate_covariates = _b[`trt_indicator']
+            local diff_var_covariates = e(V)[1,1]
+        }
+
+        // Store values and write CSV
+        qui frame change `diff_df'
+        qui replace diff_estimate = `diff_estimate'
+        qui replace diff_var = `diff_var'
+        qui replace weights = `weight_val'
+        if "`covariates'" != "none" {
+            qui replace diff_estimate_covariates = `diff_estimate_covariates'
+            qui replace diff_var_covariates = `diff_var_covariates'
+        }
+        else if "`covariates'" == "none" {
+            qui tostring diff_estimate_covariates, replace
+            qui tostring diff_var_covariates, replace
+            qui replace diff_estimate_covariates = "NA"
+            qui replace diff_var_covariates = "NA"
+        }
+        qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        qui export delimited using "`fullpath_diff'", replace datafmt
+        qui frame change default
+
+        // Do date matching procedure for trends_data
+
+        // Compute trends_data
+
+        // Write trends_data CSV file
+        
     }
     else if `check_staggered' == 1 {
 
