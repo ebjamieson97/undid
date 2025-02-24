@@ -40,10 +40,10 @@ if _rc {
 * make sure proper error messages display
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
-use "test_dta_files\State71.dta", clear
+use "test_dta_files\State73.dta", clear
 tostring year, replace
 
-undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy")
+undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_common.csv") silo_name("73") time_column(year) outcome_column(coll) silo_date_format("yyyy")
 
 
 

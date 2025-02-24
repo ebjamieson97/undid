@@ -1,13 +1,13 @@
 /*------------------------------------*/
 /*undid_stage_two*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-22 */
+/*version 1.0.0 2025-02-24 */
 /*------------------------------------*/
 cap program drop undid_stage_two
 program define undid_stage_two
     version 16
     syntax, empty_diff_filepath(string) silo_name(string) ///
-            time_column(varname) outcome_column(varname) [silo_date_format(string)] ///
+            time_column(varname) outcome_column(varname) silo_date_format(string) ///
             [consider_covariates(int 1) filepath(string)]
 
     // ---------------------------------------------------------------------------------------- //
@@ -80,7 +80,7 @@ program define undid_stage_two
             break
         }
     }
-    if (`check_common' == 0 & `check_staggered' == 0) {
+    if (`check_common' == 0 & `check_staggered' == 0) | (`check_common' == 1 & `check_staggered' == 1)  {
         di as error "Error: The loaded CSV does not match the expected staggered adoption or common treatment time formats."
         exit 9
     }
@@ -96,6 +96,7 @@ program define undid_stage_two
         di as error "Error: The silo_name: `silo_name' is not recognized. Must be one of: `silos'."
         exit 5
     }
+    qui keep if silo_name == "`silo_name'"
     
     // Check that covariates specified in empty_diff_df exist in the silo data
     local covariates = subinstr(covariates[1], ";", " ", .)
@@ -178,6 +179,39 @@ program define undid_stage_two
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------------- PART TWO: Processing -------------------------------- // 
     // ---------------------------------------------------------------------------------------- //
+
+    if `check_common' == 1 {
+        // Compute diff_estimate and diff_var
+        qui frame change `diff_df'
+        qui levelsof common_treatment_time, local(common_treatment_local) clean
+        local cmn_trt_time = word("`common_treatment_local'", 1)
+        qui levelsof date_format, local(date_formats) clean
+        local diff_df_date_format = word("`date_formats'", 1)
+        qui _parse_string_to_date, varname(common_treatment_time) date_format("`diff_df_date_format'") newvar(cmn_trt_date)
+        qui summarize cmn_trt_date
+        local trt_date = r(min)
+        qui frame change default
+        tempvar date
+        tempvar trt_indicator
+        qui _parse_string_to_date, varname(`time_column') date_format("`silo_date_format'") newvar(`date')
+        qui gen trt_indicator = (`date' >= `trt_date')
+        qui count if trt_indicator == 0
+        local count_0 = r(N)
+        qui count if trt_indicator == 1
+        local count_1 = r(N)
+        if `count_0' == 0 | `count_1' == 0 {
+            di as error "Error: The local silo must have at least one obs before and after (or at) `cmn_trt_time'."
+            exit 13
+        }
+        qui regress `outcome_column' trt_indicator, robust
+        local coef_trt = _b[trt_indicator]
+        di as result "Coefficient on trt_indicator: `coef_trt'"
+
+        // Compute diff_estimate_covariates and diff_var_covariates
+    }
+    else if `check_staggered' == 1 {
+
+    }
 
 
 
