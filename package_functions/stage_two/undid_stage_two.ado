@@ -98,6 +98,9 @@ program define undid_stage_two
     }
     qui keep if silo_name == "`silo_name'"
 
+    // Grab empty_diff date format
+    local empty_diff_date_format = date_format[1]
+
     // Convert diff_estimate, diff_var, diff_estimate_covariates, and diff_var_covariates in to numeric (double) columns with maximum precision
     foreach var in diff_estimate diff_var diff_estimate_covariates diff_var_covariates {
         qui replace `var' = "" if `var' == "NA" | `var' == "missing"
@@ -109,7 +112,7 @@ program define undid_stage_two
         qui format `var' %20.15g
     }
 
-    // Convert weight column (if it exists) to a double and store the weighting method for later
+    // Convert weight column (if it exists) to a double and store the weighting method for later, also grab some info for trends_data
     if `check_common' == 1 {
         local weight = lower(weights[1])
         qui replace weights = ""
@@ -119,7 +122,14 @@ program define undid_stage_two
         qui gen weights = weights_tmp
         qui drop weights_tmp
         qui format weights %20.15g
+        if treat[1] == "0" {
+            local treatment_time_trends "control"
+        }
+        else if treat[1] == "1" {
+            local treatment_time_trends = common_treatment_time[1]
+        }
     }
+
     // Check that covariates specified in empty_diff_df exist in the silo data
     local covariates = subinstr(covariates[1], ";", " ", .)
     qui local n_covariates = wordcount("`covariates'")
@@ -205,6 +215,10 @@ program define undid_stage_two
     if `check_common' == 1 {
         // Compute diff_estimate and diff_var
         qui frame change `diff_df'
+        qui _parse_string_to_date, varname(start_time) date_format("yyyy-mm-dd") newvar(start_date)
+        qui _parse_string_to_date, varname(end_time) date_format("yyyy-mm-dd") newvar(end_date)
+        local end_date = end_date[1]
+        local start_date = start_date[1]
         qui levelsof common_treatment_time, local(common_treatment_local) clean
         local cmn_trt_time = word("`common_treatment_local'", 1)
         qui levelsof date_format, local(date_formats) clean
@@ -214,6 +228,10 @@ program define undid_stage_two
         local trt_date = r(min)
         qui drop cmn_trt_date
         qui frame change default
+        tempvar start_date_fixed
+        gen `start_date_fixed' = real("`start_date'")
+        tempvar end_date_fixed
+        gen `end_date_fixed' = real("`end_date'")
         tempvar date
         tempvar trt_indicator
         qui _parse_string_to_date, varname(`time_column') date_format("`silo_date_format'") newvar(`date')
@@ -233,18 +251,18 @@ program define undid_stage_two
             di as error "Error: weight indicated in empty_diff_df.csv must be one of: standard"
             exit 14
         }
-        qui regress `outcome_column' `trt_indicator', robust
+        qui regress `outcome_column' `trt_indicator' if `date' >= `start_date_fixed' & `date' <= `end_date_fixed', robust
         local diff_estimate = _b[`trt_indicator']
         local diff_var = e(V)[1,1]
 
         // Compute diff_estimate_covariates and diff_var_covariates
         if "`covariates'" != "none" {
-            qui regress `outcome_column' `trt_indicator' `covariates', robust
+            qui regress `outcome_column' `trt_indicator' `covariates' if `date' >= `start_date_fixed' & `date' <= `end_date_fixed', robust
             local diff_estimate_covariates = _b[`trt_indicator']
             local diff_var_covariates = e(V)[1,1]
         }
 
-        // Store values and write CSV
+        // Store values and write filled_diff_df CSV
         qui frame change `diff_df'
         qui replace diff_estimate = `diff_estimate'
         qui replace diff_var = `diff_var'
@@ -261,13 +279,151 @@ program define undid_stage_two
         }
         qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
         qui export delimited using "`fullpath_diff'", replace datafmt
-        qui frame change default
 
-        // Do date matching procedure for trends_data
+        // Start date matching procedure for trends_data
+        local freq_string = freq[1]
+        
+        // Define date increments
+        local num = real(word("`freq_string'", 1))
+        local unit = word("`freq_string'", 2)
+        local increment = .
+        if "`unit'" == "weeks" | "`unit'" == "week" {
+            local increment = 7 * `num'
+        } 
+        else if "`unit'" == "months" | "`unit'" == "month" {
+            local increment = .
+        } 
+        else if "`unit'" == "years" | "`unit'" == "year" {
+            local increment = .
+        } 
+        else if "`unit'" == "days" | "`unit'" == "day"{
+            local increment = `num'
+        }
+
+        // Loop through dates from start to one period past end time to create local of dates to be used for trends_data
+        local list_of_dates ""
+        local current = start_date[1]
+        local list_of_dates "`list_of_dates' `current'"
+        while `current' <= `end_date' {
+            // Handle different units
+    		if "`unit'" == "months" | "`unit'" == "month" {
+    		    local next_month = month(`current') + `num'
+    		    local year_adj = floor(`next_month'/12)
+    		    if `next_month' > 12 {
+                    local proposed_day = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current'), year(`current') + `year_adj'))
+                    local proposed_day_minus_one = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 1, year(`current') + `year_adj'))
+                    local proposed_day_minus_two = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 2, year(`current') + `year_adj'))
+                    local proposed_day_minus_three = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 3, year(`current') + `year_adj'))
+                    local day_final = max(`proposed_day', `proposed_day_minus_one', `proposed_day_minus_two', `proposed_day_minus_three')
+    		    	local current = mdy(month(`current') + `num' - 12*`year_adj', `day_final', year(`current') + `year_adj')
+                    local list_of_dates "`list_of_dates' `current'"
+    		    }
+    		    else if `next_month' <= 12 {
+                    local proposed_day = day(mdy(month(`current') + `num', day(`current'), year(`current')))
+                    local proposed_day_minus_one = day(mdy(month(`current') + `num', day(`current') - 1, year(`current')))
+                    local proposed_day_minus_two = day(mdy(month(`current') + `num', day(`current') - 2, year(`current')))
+                    local proposed_day_minus_three = day(mdy(month(`current') + `num', day(`current') - 3, year(`current')))
+                    local day_final = max(`proposed_day', `proposed_day_minus_one', `proposed_day_minus_two', `proposed_day_minus_three')
+    		        local current = mdy(month(`current') + `num', day(`current'), year(`current'))
+                    local list_of_dates "`list_of_dates' `current'"
+    		    }
+    		}
+    		else if "`unit'" == "years" | "`unit'" == "year" {
+    			local current = mdy(month(`current'), day(`current'), year(`current') + `num')
+                local list_of_dates "`list_of_dates' `current'"
+    		}
+    		else {
+    			local current = `current' + `increment'
+                local list_of_dates "`list_of_dates' `current'"
+    		}
+        }
+
+        // Match dates from the local silo to the most recently passed date in the list_of_dates local
+        qui frame change default
+        qui tempvar matched_date
+        qui gen `matched_date' = .
+        foreach date_str of local list_of_dates {
+            tempvar temp_date
+            qui gen `temp_date' = real("`date_str'")
+            qui replace `matched_date' = `temp_date' if `temp_date' <= `date' & (`matched_date' < `temp_date' | `matched_date' == .)
+        }
 
         // Compute trends_data
+        // Initialize locals
+        local mean_outcome_trends
+        if "`covariates'" != "none" {
+            local mean_outcome_resid_trends
+        }
+
+        // Compute conditional means
+        qui levelsof `matched_date', local(matched_dates) clean
+        foreach m_date of local matched_dates {
+            qui summarize `outcome_column' if `matched_date' == `m_date'
+            qui local mean_outcome = r(mean)
+            local mean_outcome_trends "`mean_outcome_trends' `mean_outcome'"
+            if "`covariates'" != "none" {
+                qui reg `outcome_column' `covariates' if `matched_date' == `m_date', noconstant
+                tempvar resid_trends
+                qui predict double `resid_trends' if `matched_date' == `m_date', residuals
+                qui summarize `resid_trends'
+                qui local mean_outcome_resid = r(mean)
+                qui drop `resid_trends'
+                local mean_outcome_resid_trends "`mean_outcome_resid_trends' `mean_outcome_resid'"
+            }
+        }
+
+        // Create trends frame
+        if "`covariates'" == "none" {
+            tempname trends_frame
+            qui cap frame drop `trends_frame'
+            qui frame create `trends_frame' ///
+            strL silo_name ///
+            strL treatment_time ///
+            double time_numeric int ///
+            double mean_outcome /// 
+            strL mean_outcome_residualized ///
+            strL covariates ///
+            strL date_format ///
+            strL freq
+        }
+        else if "`covariates'" != "none"{
+            tempname trends_frame
+            qui cap frame drop `trends_frame'
+            qui frame create `trends_frame' ///
+            strL silo_name ///
+            strL treatment_time ///
+            double time_numeric int ///
+            double mean_outcome /// 
+            double mean_outcome_residualized ///
+            strL covariates ///
+            strL date_format ///
+            strL freq
+        }
+        
+        // Populate trends frame
+        qui frame change `trends_frame'
+        local N : word count `matched_dates'
+        local covariates = subinstr("`covariates'", " ", ";", .)
+        forvalues i = 1/`N' {
+            local time : word `i' of `matched_dates'
+            local mean_outcome : word `i' of `mean_outcome_trends'
+            if "`covariates'" == "none" {
+                qui frame post `trends_frame' ("`silo_name'") ("`treatment_time_trends'") (`time') (`mean_outcome') ("NA") ("`covariates'") ("`empty_diff_date_format'") ("`freq_string'")
+            }
+            else if "`covariates'" != "none" {
+                local mean_outcome_resid : word `i' of `mean_outcome_resid_trends'
+                qui frame post `trends_frame' ("`silo_name'") ("`treatment_time_trends'") (`time') (`mean_outcome') (`mean_outcome_resid') ("`covariates'") ("`empty_diff_date_format'") ("`freq_string'")
+            }    
+        }
+        
+        // Convert numeric time in the trends data to a readable format 
+        qui _parse_date_to_string, varname(time_numeric) date_format("`empty_diff_date_format'") newvar(time)
+        qui order silo_name treatment_time time mean_outcome mean_outcome_residualized covariates date_format freq
+        qui drop time_numeric 
 
         // Write trends_data CSV file
+        qui export delimited using "`fullpath_trends'", replace
+        qui frame change default
         
     }
     else if `check_staggered' == 1 {
