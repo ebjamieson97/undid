@@ -212,13 +212,32 @@ program define undid_stage_two
     // ---------------------------------- PART TWO: Processing -------------------------------- // 
     // ---------------------------------------------------------------------------------------- //
 
+    // Switch to empty_diff and create the start and end times as date objects (useful for both common and staggered scenarios)
+    qui frame change `diff_df'
+    qui _parse_string_to_date, varname(start_time) date_format("yyyy-mm-dd") newvar(start_date)
+    qui _parse_string_to_date, varname(end_time) date_format("yyyy-mm-dd") newvar(end_date)
+    local end_date = end_date[1]
+    local start_date = start_date[1]
+    // Define date increments
+    local freq_string = freq[1]
+    local num = real(word("`freq_string'", 1))
+    local unit = word("`freq_string'", 2)
+    local increment = .
+    if "`unit'" == "weeks" | "`unit'" == "week" {
+        local increment = 7 * `num'
+    } 
+    else if "`unit'" == "months" | "`unit'" == "month" {
+        local increment = .
+    } 
+    else if "`unit'" == "years" | "`unit'" == "year" {
+        local increment = .
+    } 
+    else if "`unit'" == "days" | "`unit'" == "day"{
+        local increment = `num'
+    }
+
     if `check_common' == 1 {
         // Compute diff_estimate and diff_var
-        qui frame change `diff_df'
-        qui _parse_string_to_date, varname(start_time) date_format("yyyy-mm-dd") newvar(start_date)
-        qui _parse_string_to_date, varname(end_time) date_format("yyyy-mm-dd") newvar(end_date)
-        local end_date = end_date[1]
-        local start_date = start_date[1]
         qui levelsof common_treatment_time, local(common_treatment_local) clean
         local cmn_trt_time = word("`common_treatment_local'", 1)
         qui levelsof date_format, local(date_formats) clean
@@ -281,25 +300,6 @@ program define undid_stage_two
         qui export delimited using "`fullpath_diff'", replace datafmt
 
         // Start date matching procedure for trends_data
-        local freq_string = freq[1]
-        
-        // Define date increments
-        local num = real(word("`freq_string'", 1))
-        local unit = word("`freq_string'", 2)
-        local increment = .
-        if "`unit'" == "weeks" | "`unit'" == "week" {
-            local increment = 7 * `num'
-        } 
-        else if "`unit'" == "months" | "`unit'" == "month" {
-            local increment = .
-        } 
-        else if "`unit'" == "years" | "`unit'" == "year" {
-            local increment = .
-        } 
-        else if "`unit'" == "days" | "`unit'" == "day"{
-            local increment = `num'
-        }
-
         // Loop through dates from start to one period past end time to create local of dates to be used for trends_data
         local list_of_dates ""
         local current = start_date[1]
@@ -427,6 +427,156 @@ program define undid_stage_two
         
     }
     else if `check_staggered' == 1 {
+        // Start by doing the date matching procedure
+        // Loop through dates from start to one period past end time 
+        local list_of_dates ""
+        local current = start_date[1]
+        local list_of_dates "`list_of_dates' `current'"
+        while `current' <= `end_date' {
+            // Handle different units
+    		if "`unit'" == "months" | "`unit'" == "month" {
+    		    local next_month = month(`current') + `num'
+    		    local year_adj = floor(`next_month'/12)
+    		    if `next_month' > 12 {
+                    local proposed_day = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current'), year(`current') + `year_adj'))
+                    local proposed_day_minus_one = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 1, year(`current') + `year_adj'))
+                    local proposed_day_minus_two = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 2, year(`current') + `year_adj'))
+                    local proposed_day_minus_three = day(mdy(month(`current') + `num' - 12*`year_adj', day(`current') - 3, year(`current') + `year_adj'))
+                    local day_final = max(`proposed_day', `proposed_day_minus_one', `proposed_day_minus_two', `proposed_day_minus_three')
+    		    	local current = mdy(month(`current') + `num' - 12*`year_adj', `day_final', year(`current') + `year_adj')
+                    local list_of_dates "`list_of_dates' `current'"
+    		    }
+    		    else if `next_month' <= 12 {
+                    local proposed_day = day(mdy(month(`current') + `num', day(`current'), year(`current')))
+                    local proposed_day_minus_one = day(mdy(month(`current') + `num', day(`current') - 1, year(`current')))
+                    local proposed_day_minus_two = day(mdy(month(`current') + `num', day(`current') - 2, year(`current')))
+                    local proposed_day_minus_three = day(mdy(month(`current') + `num', day(`current') - 3, year(`current')))
+                    local day_final = max(`proposed_day', `proposed_day_minus_one', `proposed_day_minus_two', `proposed_day_minus_three')
+    		        local current = mdy(month(`current') + `num', day(`current'), year(`current'))
+                    local list_of_dates "`list_of_dates' `current'"
+    		    }
+    		}
+    		else if "`unit'" == "years" | "`unit'" == "year" {
+    			local current = mdy(month(`current'), day(`current'), year(`current') + `num')
+                local list_of_dates "`list_of_dates' `current'"
+    		}
+    		else {
+    			local current = `current' + `increment'
+                local list_of_dates "`list_of_dates' `current'"
+    		}
+        }
+
+        // Grab all of the pre and post times for the diff_estimate calculations
+        qui tempvar post pre
+        qui tempvar post_date
+        qui tempvar pre_date
+        qui gen `post' = substr(diff_times, 1, strpos(diff_times, ";") - 1)
+        qui gen `pre'  = substr(diff_times, strpos(diff_times, ";") + 1, .)
+        qui _parse_string_to_date, varname(`post') date_format("`empty_diff_date_format'") newvar(`post_date') 
+        qui _parse_string_to_date, varname(`pre') date_format("`empty_diff_date_format'") newvar(`pre_date')
+        local postlist
+        local prelist
+        qui {
+            forvalues i = 1/`=_N' {
+                local post = `post_date'[`i']
+                local pre  = `pre_date'[`i']
+
+                local postlist "`postlist' `post'"
+                local prelist  "`prelist' `pre'"
+            }
+        }
+
+        // Match dates from the local silo to the most recently passed date in the list_of_dates local
+        qui frame change default
+        qui tempvar date
+        qui _parse_string_to_date, varname(`time_column') date_format("`silo_date_format'") newvar(`date')
+        qui tempvar matched_date
+        qui gen `matched_date' = .
+        foreach date_str of local list_of_dates {
+            tempvar temp_date
+            qui gen `temp_date' = real("`date_str'")
+            qui replace `matched_date' = `temp_date' if `temp_date' <= `date' & (`matched_date' < `temp_date' | `matched_date' == .)
+        }
+                  
+        // Start running regressions 
+        local coef_list ""
+        local coef_list_var ""
+        if  "`covariates'" != "none" {
+            local coef_list_cov ""
+            local coef_list_cov_var ""
+        }
+        local n_pairs : word count `postlist'
+        forvalues i = 1/`n_pairs' {
+            local this_post = word("`postlist'", `i')
+            local this_pre  = word("`prelist'", `i')
+            preserve
+                qui count if `matched_date' == `this_pre'
+                local n_pre = r(N)
+                qui count if `matched_date' == `this_post'
+                local n_post = r(N)
+                if `n_pre' == 0 | `n_post' == 0 {
+                    local coef_list "`coef_list' ."
+                    local coef_list_var "`coef_list_var' ."
+                    local coef_list_cov "`coef_list_cov' ."
+                    local coef_list_cov_var "`coef_list_cov_var' ."
+                }
+                else if `n_pre' + `n_post' < 2 {
+                    local coef_list "`coef_list' ."
+                    local coef_list_var "`coef_list_var' ."
+                    local coef_list_cov "`coef_list_cov' ."
+                    local coef_list_cov_var "`coef_list_cov_var' ."
+                }
+                else {
+                    qui keep if `matched_date' == `this_post' | `matched_date' == `this_pre'
+                    tempvar x
+                    qui gen `x' = (`matched_date' == real("`this_post'"))
+                    qui regress `outcome_column' `x', robust
+                    local b = _b[`x']
+                    local b_var = e(V)[1,1]
+                    if "`covariates'" != "none" {
+                        qui regress `outcome_column' `x' `covariates', robust
+                        local b_cov = _b[`x']
+                        local b_cov_var = e(V)[1,1]
+                        local coef_list_cov "`coef_list_cov' `b_cov'"
+                        local coef_list_cov_var "`coef_list_cov_var' `b_cov_var'"
+                    }
+                    else {
+                        local coef_list_cov "`coef_list_cov' ."
+                        local coef_list_cov_var "`coef_list_cov_var' ."
+                    }
+                    local coef_list "`coef_list' `b'"
+                    local coef_list_var "`coef_list_var' `b_var'"
+                }
+            restore
+        }
+
+        // Switch back to the diff_df and post results and write the csv output
+        qui frame change `diff_df'
+        local n_coefs : word count `coef_list'
+        qui set obs `n_coefs'
+        qui drop diff_estimate
+        qui drop diff_var
+        qui drop diff_estimate_covariates
+        qui drop diff_var_covariates
+        qui gen str25 diff_estimate = ""
+        qui gen str25 diff_var = ""
+        qui gen str25 diff_estimate_covariates = ""
+        qui gen str25 diff_var_covariates = ""
+        forvalues i = 1/`n_coefs' {
+            local coef : word `i' of `coef_list'
+            local coef_var : word `i' of `coef_list_var'
+            local coef_cov : word `i' of `coef_list_cov'
+            local coef_cov_var : word `i' of `coef_list_cov_var'
+            qui replace diff_estimate = cond("`coef'" == "." | "`coef'" == "", "NA", string(real("`coef'"), "%21.18f")) in `i'
+            qui replace diff_var = cond("`coef_var'" == "." | "`coef_var'" == "", "NA", string(real("`coef_var'"), "%21.18f")) in `i'
+            qui replace diff_estimate_covariates = cond("`coef_cov'" == "." | "`coef_cov'" == "", "NA", string(real("`coef_cov'"), "%21.18f")) in `i'
+            qui replace diff_var_covariates = cond("`coef_cov_var'" == "." | "`coef_cov_var'" == "", "NA", string(real("`coef_cov_var'"), "%21.18f")) in `i'
+        }
+        qui keep silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        qui order silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        qui export delimited using "`fullpath_diff'", replace datafmt        
+
+        // Now do trends data!
 
     }
 
