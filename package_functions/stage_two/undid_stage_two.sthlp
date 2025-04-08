@@ -13,10 +13,6 @@ undid - Estimate difference-in-differences with unpoolable data. {p_end}
 {phang}
 {cmd:undid_stage_two} Based on the information given in the received `empty_diff_df.csv`, computes the appropriate differences in mean outcomes at the local silo and saves as `filled_diff_df_silo_name.csv`. Also stores trends data as `trends_data_silo_name.csv`. Displays the filepath of the created CSV files as the results output.
 
-    syntax, empty_diff_filepath(string) silo_name(string) ///
-            time_column(varname) outcome_column(varname) silo_date_format(string) ///
-            [consider_covariates(int 1) filepath(string)]
-
 Required parameters:
 
 - {bf:empty_diff_filepath} : A string specifying the filepath to the empty_diff_df.csv
