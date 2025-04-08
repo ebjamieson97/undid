@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_two*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-24 */
+/*version 1.0.0 2025-04-07 */
 /*------------------------------------*/
 cap program drop undid_stage_two
 program define undid_stage_two
@@ -131,7 +131,12 @@ program define undid_stage_two
     }
 
     // Check that covariates specified in empty_diff_df exist in the silo data
-    local covariates = subinstr(covariates[1], ";", " ", .)
+    if `consider_covariates' == 1 {
+        local covariates = subinstr(covariates[1], ";", " ", .)
+    }
+    else if `consider_covariates' == 0 {
+        local covariates = "none"
+    }
     qui local n_covariates = wordcount("`covariates'")
     local covariates_missing = 0
     local covariates_numeric = 0
@@ -577,10 +582,83 @@ program define undid_stage_two
         qui export delimited using "`fullpath_diff'", replace datafmt        
 
         // Now do trends data!
+        qui frame change default 
+        // Initialize locals
+        local mean_outcome_trends
+        if "`covariates'" != "none" {
+            local mean_outcome_resid_trends
+        }
 
+        // Compute conditional means
+        qui levelsof `matched_date', local(matched_dates) clean
+        foreach m_date of local matched_dates {
+            qui summarize `outcome_column' if `matched_date' == `m_date'
+            qui local mean_outcome = r(mean)
+            local mean_outcome_trends "`mean_outcome_trends' `mean_outcome'"
+            if "`covariates'" != "none" {
+                qui reg `outcome_column' `covariates' if `matched_date' == `m_date', noconstant
+                tempvar resid_trends
+                qui predict double `resid_trends' if `matched_date' == `m_date', residuals
+                qui summarize `resid_trends'
+                qui local mean_outcome_resid = r(mean)
+                qui drop `resid_trends'
+                local mean_outcome_resid_trends "`mean_outcome_resid_trends' `mean_outcome_resid'"
+            }
+        }
+        
+        // Create trends frame
+        if "`covariates'" == "none" {
+            tempname trends_frame
+            qui cap frame drop `trends_frame'
+            qui frame create `trends_frame' ///
+            strL silo_name ///
+            strL treatment_time ///
+            double time_numeric int ///
+            double mean_outcome /// 
+            strL mean_outcome_residualized ///
+            strL covariates ///
+            strL date_format ///
+            strL freq
+        }
+        else if "`covariates'" != "none"{
+            tempname trends_frame
+            qui cap frame drop `trends_frame'
+            qui frame create `trends_frame' ///
+            strL silo_name ///
+            strL treatment_time ///
+            double time_numeric int ///
+            double mean_outcome /// 
+            double mean_outcome_residualized ///
+            strL covariates ///
+            strL date_format ///
+            strL freq
+        }
+        
+        // Populate trends frame
+        qui frame change `trends_frame'
+        local N : word count `matched_dates'
+        local covariates = subinstr("`covariates'", " ", ";", .)
+        forvalues i = 1/`N' {
+            local time : word `i' of `matched_dates'
+            local mean_outcome : word `i' of `mean_outcome_trends'
+            if "`covariates'" == "none" {
+                qui frame post `trends_frame' ("`silo_name'") ("`treatment_time_trends'") (`time') (`mean_outcome') ("NA") ("`covariates'") ("`empty_diff_date_format'") ("`freq_string'")
+            }
+            else if "`covariates'" != "none" {
+                local mean_outcome_resid : word `i' of `mean_outcome_resid_trends'
+                qui frame post `trends_frame' ("`silo_name'") ("`treatment_time_trends'") (`time') (`mean_outcome') (`mean_outcome_resid') ("`covariates'") ("`empty_diff_date_format'") ("`freq_string'")
+            }    
+        }
+        
+        // Convert numeric time in the trends data to a readable format 
+        qui _parse_date_to_string, varname(time_numeric) date_format("`empty_diff_date_format'") newvar(time)
+        qui order silo_name treatment_time time mean_outcome mean_outcome_residualized covariates date_format freq
+        qui drop time_numeric 
+
+        // Write trends_data CSV file
+        qui export delimited using "`fullpath_trends'", replace
+        qui frame change default
     }
-
-
 
     // Convert to Windows-friendly format for display if on Windows
     if "`c(os)'" == "Windows" {

@@ -7,7 +7,7 @@ version 16
 /*----------undid_stage_two-----------*/
 /*-----------TEST TEST TEST-----------*/
 /*--------------UNTESTED---------------*/
-/*-------version 1.0.0 2025-04-01-----*/
+/*-------version 1.0.0 2025-04-07-----*/
 /*------------------------------------*/
 /*EXITS 1 to 13: PASSING --------------*/
 
@@ -44,8 +44,7 @@ use "test_dta_files\State71.dta", clear
 keep if year != 1992
 tostring year, replace
 
-
-undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'")
+undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") consider_covariates(0)
 
 
 

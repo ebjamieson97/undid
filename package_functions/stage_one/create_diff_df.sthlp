@@ -33,6 +33,10 @@ For example, if the time periods to consider are two years, set freq("year") fre
 - {bf:weights} : A string indicating the type of weighting to use in the case of common adoption. Defaults to "standard". Options are:
     -> "standard" weighs each silo according to (num of obs after and at the treatment period) / (num of obs)
 
+- {bf:filename} : A string specifying the outputted filename. Must end in ".csv". Defaults to "empty_diff_df.csv".
+
+- {bf:filepath} : A string specifying the path to the folder in which to save the output file, e.g. "`c(pwd)'". Defaults to "`c(tempdir)'".
+
 
 {title:Syntax}
 
