@@ -21,7 +21,7 @@ program define undid_stage_two
 
     // Check consider_covariates
     if `consider_covariates' < 0 | `consider_covariates' > 1 {
-        di as result "Error: consider_covariates must be set to 0 (false) or to 1 (true)."
+        di as error "Error: consider_covariates must be set to 0 (false) or to 1 (true)."
         exit 2
     }
 

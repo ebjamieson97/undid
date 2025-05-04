@@ -1,0 +1,13 @@
+silo_name,treatment_time,time,mean_outcome,mean_outcome_residualized,covariates,date_format,freq
+58,1991,1989,0.264150943396226,NA,none,yyyy,1 year
+58,1991,1990,0.317073170731707,NA,none,yyyy,1 year
+58,1991,1991,0.272727272727273,NA,none,yyyy,1 year
+58,1991,1992,0.355555555555556,NA,none,yyyy,1 year
+58,1991,1993,0.379310344827586,NA,none,yyyy,1 year
+58,1991,1994,0.414285714285714,NA,none,yyyy,1 year
+58,1991,1995,0.357142857142857,NA,none,yyyy,1 year
+58,1991,1996,0.4,NA,none,yyyy,1 year
+58,1991,1997,0.375,NA,none,yyyy,1 year
+58,1991,1998,0.442307692307692,NA,none,yyyy,1 year
+58,1991,1999,0.392857142857143,NA,none,yyyy,1 year
+58,1991,2000,0.283018867924528,NA,none,yyyy,1 year
