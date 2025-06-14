@@ -1,14 +1,14 @@
 /*------------------------------------*/
 /*undid_stage_two*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-04-07 */
+/*version 1.0.0 2025-06-13 */
 /*------------------------------------*/
 cap program drop undid_stage_two
 program define undid_stage_two
     version 16
     syntax, empty_diff_filepath(string) silo_name(string) ///
             time_column(varname) outcome_column(varname) silo_date_format(string) ///
-            [consider_covariates(int 1) filepath(string)]
+            [consider_covariates(int 1) filepath(string) anonymize_weights(int 0) anonymize_size(int 5)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------------- PART ONE: Checks ------------------------------------ // 
@@ -16,8 +16,22 @@ program define undid_stage_two
 
     // Define undid variables
     local UNDID_DATE_FORMATS "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy ddmmyyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
-    local expected_common "silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq"
-    local expected_staggered "silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq"
+    local expected_common "silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size"
+    local expected_staggered "silo_name gvar treat diff_times gt RI start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size"
+
+    // Check anonymize_weights
+    if `anonymize_weights' < 0 | `anonymize_weights' > 1 {
+        di as error "Error: anonymize_weights must be set to 0 (false) or to 1 (true)."
+        exit 15
+    }
+
+    // Check anonymize_size
+    if `anonymize_weights' == 1 {
+        if `anonymize_size' < 1 {
+            di as error "Error: anonymize_size must be set to an integer > 0"
+            exit 16
+        }
+    }
 
     // Check consider_covariates
     if `consider_covariates' < 0 | `consider_covariates' > 1 {
@@ -98,8 +112,13 @@ program define undid_stage_two
     }
     qui keep if silo_name == "`silo_name'"
 
-    // Grab empty_diff date format
+    // Grab empty_diff date format and weights
     local empty_diff_date_format = date_format[1]
+    local weight = lower(weights[1])
+    if !inlist("`weight'", "none", "diff", "att", "both") {
+        di as error "Error: Found a weight that was not one of: none, diff, att, or both."
+        exit 17
+    }
 
     // Convert diff_estimate, diff_var, diff_estimate_covariates, and diff_var_covariates in to numeric (double) columns with maximum precision
     foreach var in diff_estimate diff_var diff_estimate_covariates diff_var_covariates {
@@ -112,21 +131,25 @@ program define undid_stage_two
         qui format `var' %20.15g
     }
 
-    // Convert weight column (if it exists) to a double and store the weighting method for later, also grab some info for trends_data
+    // Grab information to post to trends_data.csv files
     if `check_common' == 1 {
-        local weight = lower(weights[1])
-        qui replace weights = ""
-        qui destring weights, replace
-        qui gen double weights_tmp = weights
-        qui drop weights
-        qui gen weights = weights_tmp
-        qui drop weights_tmp
-        qui format weights %20.15g
         if treat[1] == "0" {
             local treatment_time_trends "control"
         }
         else if treat[1] == "1" {
             local treatment_time_trends = common_treatment_time[1]
+        }
+    }
+    else {
+        levelsof treat if RI == "0", local(levels_treat)
+        local first_treat : word 1 of `levels_treat'
+        if "`first_treat'" == "0" {
+            local treatment_time_trends "control"
+        }
+        else if "`first_treat'" == "1" {
+            levelsof gvar if RI == "0", local(levels_gvar)
+            local first_gvar : word 1 of `levels_gvar'
+            local treatment_time_trends "`first_gvar'"
         }
     }
 
@@ -219,8 +242,8 @@ program define undid_stage_two
 
     // Switch to empty_diff and create the start and end times as date objects (useful for both common and staggered scenarios)
     qui frame change `diff_df'
-    qui _parse_string_to_date, varname(start_time) date_format("yyyy-mm-dd") newvar(start_date)
-    qui _parse_string_to_date, varname(end_time) date_format("yyyy-mm-dd") newvar(end_date)
+    qui _parse_string_to_date, varname(start_time) date_format("`empty_diff_date_format'") newvar(start_date)
+    qui _parse_string_to_date, varname(end_time) date_format("`empty_diff_date_format'") newvar(end_date)
     local end_date = end_date[1]
     local start_date = start_date[1]
     // Define date increments
@@ -268,13 +291,21 @@ program define undid_stage_two
             di as error "Error: The local silo must have at least one obs before and after (or at) `cmn_trt_time'."
             exit 13
         }
-        if "`weight'" == "standard" {
-            local weight_val = `count_1' / (`count_1' + `count_0')
+        local weight_val_n = .
+        local weight_val_n_t = .
+        if inlist("`weight'", "diff", "both") {
+            local weight_val_n = `count_0' + `count_1'
+            if `anonymize_weights' == 1 {
+                local weight_val_n = max(`anonymize_size', `anonymize_size' * round(`weight_val_n' / `anonymize_size'))
+            }
         }
-        else {
-            di as error "Error: weight indicated in empty_diff_df.csv must be one of: standard"
-            exit 14
+        if inlist("`weight'", "att", "both") {
+            local weight_val_n_t = `count_1'
+            if `anonymize_weights' == 1 {
+                local weight_val_n_t = max(`anonymize_size', `anonymize_size' * round(`weight_val_n_t' / `anonymize_size'))
+            }
         }
+        
         qui regress `outcome_column' `trt_indicator' if `date' >= `start_date_fixed' & `date' <= `end_date_fixed', robust
         local diff_estimate = _b[`trt_indicator']
         local diff_var = e(V)[1,1]
@@ -290,7 +321,15 @@ program define undid_stage_two
         qui frame change `diff_df'
         qui replace diff_estimate = `diff_estimate'
         qui replace diff_var = `diff_var'
-        qui replace weights = `weight_val'
+        qui replace n = cond("`weight_val_n'" == "." | "`weight_val_n'" == "", "NA", string(real("`weight_val_n'"), "%12.0f"))
+        qui replace n_t = cond("`weight_val_n_t'" == "." | "`weight_val_n_t'" == "", "NA", string(real("`weight_val_n_t'"), "%12.0f"))
+        if `anonymize_weights' == 1 {
+            qui replace anonymize_size = string(real("`anonymize_size'"), "%12.0f")
+        }
+        else {
+            qui replace anonymize_size = "NA"
+        }
+        
         if "`covariates'" != "none" {
             qui replace diff_estimate_covariates = `diff_estimate_covariates'
             qui replace diff_var_covariates = `diff_var_covariates'
@@ -301,8 +340,16 @@ program define undid_stage_two
             qui replace diff_estimate_covariates = "NA"
             qui replace diff_var_covariates = "NA"
         }
-        qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        qui drop start_date
+        qui drop end_date
+        qui order silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size
         qui export delimited using "`fullpath_diff'", replace datafmt
+
+        // Before starting the trends data need to regenerate the start_date and end_date
+        qui _parse_string_to_date, varname(start_time) date_format("`empty_diff_date_format'") newvar(start_date)
+        qui _parse_string_to_date, varname(end_time) date_format("`empty_diff_date_format'") newvar(end_date)
+        local end_date = end_date[1]
+        local start_date = start_date[1]
 
         // Start date matching procedure for trends_data
         // Loop through dates from start to one period past end time to create local of dates to be used for trends_data
@@ -506,6 +553,8 @@ program define undid_stage_two
         // Start running regressions 
         local coef_list ""
         local coef_list_var ""
+        local weight_val_n_list ""
+        local weight_val_n_t_list ""
         if  "`covariates'" != "none" {
             local coef_list_cov ""
             local coef_list_cov_var ""
@@ -538,6 +587,8 @@ program define undid_stage_two
                     qui regress `outcome_column' `x', robust
                     local b = _b[`x']
                     local b_var = e(V)[1,1]
+                    local weight_val_n = .
+                    local weight_val_n_t = .
                     if "`covariates'" != "none" {
                         qui regress `outcome_column' `x' `covariates', robust
                         local b_cov = _b[`x']
@@ -551,6 +602,21 @@ program define undid_stage_two
                     }
                     local coef_list "`coef_list' `b'"
                     local coef_list_var "`coef_list_var' `b_var'"
+                    if inlist("`weight'", "diff", "both") {
+                        local weight_val_n = `n_pre' + `n_post'
+                        if `anonymize_weights' == 1 {
+                            local weight_val_n = max(`anonymize_size', `anonymize_size' * round(`weight_val_n' / `anonymize_size'))
+                        }
+                    }
+                    local weight_val_n_list "`weight_val_n_list' `weight_val_n'"
+                    if inlist("`weight'", "att", "both") {
+                        local weight_val_n_t = `n_post'
+                        if `anonymize_weights' == 1 {
+                            local weight_val_n_t = max(`anonymize_size', `anonymize_size' * round(`weight_val_n_t' / `anonymize_size'))
+                        }
+                    }
+                    local weight_val_n_t_list "`weight_val_n_t_list' `weight_val_n_t'"
+
                 }
             restore
         }
@@ -563,6 +629,11 @@ program define undid_stage_two
         qui drop diff_var
         qui drop diff_estimate_covariates
         qui drop diff_var_covariates
+        qui drop n 
+        qui drop n_t
+        qui drop anonymize_size
+        qui gen str12 n = ""
+        qui gen str12 n_t = ""
         qui gen str25 diff_estimate = ""
         qui gen str25 diff_var = ""
         qui gen str25 diff_estimate_covariates = ""
@@ -572,13 +643,23 @@ program define undid_stage_two
             local coef_var : word `i' of `coef_list_var'
             local coef_cov : word `i' of `coef_list_cov'
             local coef_cov_var : word `i' of `coef_list_cov_var'
+            local n : word `i' of `weight_val_n_list'
+            local n_t : word `i' of `weight_val_n_t_list'
             qui replace diff_estimate = cond("`coef'" == "." | "`coef'" == "", "NA", string(real("`coef'"), "%21.18f")) in `i'
             qui replace diff_var = cond("`coef_var'" == "." | "`coef_var'" == "", "NA", string(real("`coef_var'"), "%21.18f")) in `i'
             qui replace diff_estimate_covariates = cond("`coef_cov'" == "." | "`coef_cov'" == "", "NA", string(real("`coef_cov'"), "%21.18f")) in `i'
             qui replace diff_var_covariates = cond("`coef_cov_var'" == "." | "`coef_cov_var'" == "", "NA", string(real("`coef_cov_var'"), "%21.18f")) in `i'
+            qui replace n = cond("`n'" == "." | "`n'" == "", "NA", string(real("`n'"), "%12.0f")) in `i'
+            qui replace n_t = cond("`n_t'" == "." | "`n_t'" == "", "NA", string(real("`n_t'"), "%12.0f")) in `i'
         }
-        qui keep silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
-        qui order silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        if `anonymize_weights' == 1 {
+            qui gen anonymize_size = `anonymize_size'
+        }
+        else {
+            qui gen anonymize_size = "NA"
+        }
+        qui keep silo_name gvar treat diff_times gt RI start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size
+        qui order silo_name gvar treat diff_times gt RI start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size
         qui export delimited using "`fullpath_diff'", replace datafmt        
 
         // Now do trends data!

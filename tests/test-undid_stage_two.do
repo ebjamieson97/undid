@@ -41,11 +41,11 @@ if _rc {
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
 use "test_dta_files\State71.dta", clear
-keep if year != 1992
 tostring year, replace
+set trace on 
+set tracedepth 1
+undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") anonymize_weights(1)
 
-undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("71") time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") consider_covariates(0)
-
-
+set trace off
 
  

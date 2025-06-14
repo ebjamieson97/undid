@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*create_diff_df*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-02-19 */
+/*version 1.0.0 2025-06-13 */
 /*------------------------------------*/
 cap program drop create_diff_df
 program define create_diff_df
@@ -16,12 +16,12 @@ program define create_diff_df
 
     // Define UNDID variables
     local UNDID_DATE_FORMATS "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy ddmmyyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
-    local UNDID_WEIGHTS "standard"
+    local UNDID_WEIGHTS "none diff att both"
     local UNDID_FREQ "year month week day years months weeks days"
 
     // Define default values
     if missing("`filename'") local filename "empty_diff_df.csv"
-    if missing("`weights'") local weights "standard"
+    if missing("`weights'") local weights "both"
 
     // Remove whitespace from date_format and freq
     local date_format = trim("`date_format'")
@@ -155,7 +155,7 @@ program define create_diff_df
     if "`covariates'" != "" {
         local covariates_trimmed_length = strlen(trim("`covariates'"))
         if `covariates_trimmed_length' == 0 {
-            di as error "Error: Covariates cannot be entered as a block of whitespace. To drop covariates entirely, ensure no covariates column is specified in the init.csv."
+            di as error "Error: Covariates cannot be entered as a block of whitespace. To drop covariates entirely, ensure no covariates column is specified in the init CSV."
             exit 14
         }
         local formatted_covariates = subinstr("`covariates'", " ", ";", .)
@@ -262,8 +262,13 @@ program define create_diff_df
         if _rc {
             qui gen covariates = "none"
         }
-        qui replace start_time = string(start_time_date, "%tdCCYY-NN-DD")
-        qui replace end_time = string(end_time_date, "%tdCCYY-NN-DD")
+        qui drop start_time
+        qui drop end_time
+        qui _parse_date_to_string, varname(start_time_date) date_format("`date_format'") newvar(start_time)
+        qui _parse_date_to_string, varname(end_time_date) date_format("`date_format'") newvar(end_time)
+        qui gen n = "NA"
+        qui gen n_t = "NA"
+        qui gen anonymize_size = "NA"
         qui drop start_time_date
         qui drop end_time_date
         qui drop treatment_time_date
@@ -423,8 +428,8 @@ program define create_diff_df
         // Add start_time and end_time
         qui gen start_t = `start_time_date'
         qui gen end_t =  `end_time_date'
-        qui _parse_date_to_string, varname(start_t) date_format("yyyy-mm-dd") newvar(start_time)
-        qui _parse_date_to_string, varname(end_t) date_format("yyyy-mm-dd") newvar(end_time)
+        qui _parse_date_to_string, varname(start_t) date_format("`date_format'") newvar(start_time)
+        qui _parse_date_to_string, varname(end_t) date_format("`date_format'") newvar(end_time)
         qui drop start_t
         qui drop end_t
  
@@ -438,15 +443,19 @@ program define create_diff_df
         qui replace gvar = gvar_str
         qui drop t pre gvar_str t_str pre_str 
 
-        // Add freq, date_format, covariates, diff estimates and variances and reorder
+        // Add freq, date_format, covariates, diff estimates, variances, and weights and reorder
         qui gen freq = "`freq_string'"
         qui gen date_format = "`date_format'"
         qui gen covariates = "`covariates'"
+        qui gen weights = "`weights'"
         qui gen diff_estimate = "NA"
         qui gen diff_var = "NA"
         qui gen diff_estimate_covariates = "NA"
         qui gen diff_var_covariates = "NA"
-        qui order silo_name gvar treat diff_times gt RI start_time end_time diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
+        qui gen n = "NA"
+        qui gen n_t = "NA"
+        qui gen anonymize_size = "NA"
+        qui order silo_name gvar treat diff_times gt RI start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq
  
         qui export delimited using "`fullpath'", replace
         qui frame change default

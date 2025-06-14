@@ -1,5 +1,5 @@
-silo_name,treat,common_treatment_time,start_time,end_time,weights,diff_estimate,diff_var,diff_estimate_covariates,diff_var_covariates,covariates,date_format,freq
-73,0,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,asian;black;male,yyyy,1 year
-46,0,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,asian;black;male,yyyy,1 year
-71,1,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,asian;black;male,yyyy,1 year
-58,1,1991,1989-01-01,2000-01-01,standard,NA,NA,NA,NA,asian;black;male,yyyy,1 year
+silo_name,treat,common_treatment_time,start_time,end_time,weights,diff_estimate,diff_var,diff_estimate_covariates,diff_var_covariates,covariates,date_format,freq,n,n_t,anonymize_size
+73,0,1991,1989,2000,both,NA,NA,NA,NA,male,yyyy,1 year,NA,NA,NA
+46,0,1991,1989,2000,both,NA,NA,NA,NA,male,yyyy,1 year,NA,NA,NA
+71,1,1991,1989,2000,both,NA,NA,NA,NA,male,yyyy,1 year,NA,NA,NA
+58,1,1991,1989,2000,both,NA,NA,NA,NA,male,yyyy,1 year,NA,NA,NA
