@@ -181,16 +181,35 @@ program define undid_stage_three, rclass
     if `check_staggered' == 1 {
         qui gen t_str = substr(gt, strpos(gt, ";") + 1, .)
         qui _parse_string_to_date, varname(t_str) date_format("`date_format'") newvar(t) 
+        qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date) 
     }
     if `check_staggered' == 1 & `use_pre_controls' == 1 {
-        qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date) 
         qui egen double treated_time_silo = min(cond(treat==1, gvar_date, .)), by(silo_name)
         qui replace treat = 0 if treat == -1 & t < treated_time_silo
     }
 
-    // If agg is sgt or gt might need to further drop some gts
-
     // Check that at least one treat and untreated diff exist for each sub-agg ATT computation, drop that sub-agg ATT if not
+    // Also do some extra column creating for the dummy indiactors if agg == "time"
+    if `check_staggered' == 1 {
+        if "`agg'" == "none" {
+
+        }
+        else if "`agg'" == "g" {
+
+        }
+        else if "`agg'" == "gt" {
+
+        }
+        else if "`agg'" == "silo" {
+
+        }
+        else if "`agg'" == "sgt" {
+
+        }
+        else if "`agg'" == "time" {
+
+        }
+    }
 
     // Force the agg and weights arguments to different strings, depening on how many treated silos there are 
     if `check_common' == 1 {
