@@ -573,12 +573,16 @@ program define undid_stage_two
                     local coef_list_var "`coef_list_var' ."
                     local coef_list_cov "`coef_list_cov' ."
                     local coef_list_cov_var "`coef_list_cov_var' ."
+                    local weight_val_n_list "`weight_val_n_list' ."
+                    local weight_val_n_t_list "`weight_val_n_t_list' ."
                 }
                 else if `n_pre' + `n_post' < 2 {
                     local coef_list "`coef_list' ."
                     local coef_list_var "`coef_list_var' ."
                     local coef_list_cov "`coef_list_cov' ."
                     local coef_list_cov_var "`coef_list_cov_var' ."
+                    local weight_val_n_list "`weight_val_n_list' ."
+                    local weight_val_n_t_list "`weight_val_n_t_list' ."
                 }
                 else {
                     qui keep if `matched_date' == `this_post' | `matched_date' == `this_pre'
@@ -587,8 +591,8 @@ program define undid_stage_two
                     qui regress `outcome_column' `x', robust
                     local b = _b[`x']
                     local b_var = e(V)[1,1]
-                    local weight_val_n = .
-                    local weight_val_n_t = .
+                    local weight_val_n = "."
+                    local weight_val_n_t = "."
                     if "`covariates'" != "none" {
                         qui regress `outcome_column' `x' `covariates', robust
                         local b_cov = _b[`x']

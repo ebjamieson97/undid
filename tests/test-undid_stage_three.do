@@ -38,13 +38,12 @@ if _rc {
 * make sure proper error messages display
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
-use "test_dta_files\State71.dta", clear
 // show trace for up to, say, 3 levels of calls
 set tracedepth 1
 
 // actually turn tracing on
 set trace on
-undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered\\missing_vals")
+undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered") use_pre_controls(1)
 
 set trace off
 
