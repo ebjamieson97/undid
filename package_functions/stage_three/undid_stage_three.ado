@@ -73,7 +73,6 @@ program define undid_stage_three, rclass
         display as error "No filled_diff_df_*.csv files found in `dir_path'"
         exit 7
     }
-    di as result `nfiles'
 
     // Create tempframe to import each csv file and push to a master frame
     tempfile master
@@ -167,14 +166,22 @@ program define undid_stage_three, rclass
 
     // Drop rows where y is missing 
     if `check_staggered' == 1 {
-        di as error "Dropping the following silo_name & gt values where y is missing:"
-        list silo_name gt if missing(y), noobs sepby(silo_name)
-        qui drop if missing(y)
+        qui count if missing(y)
+        local nmiss = r(N)
+        if `nmiss' > 0 {
+            di as error "Dropping the following rows where y is missing:"
+            list silo_name gt treat if missing(y), noobs sepby(silo_name)
+            qui drop if missing(y)
+        }
     }
     else if `check_common' == 1 {
-        di as error "Dropping the following silo_names for which y is missing:"
-        list silo_name if missing(y), noobs sepby(silo_name)
-        qui drop if missing(y)
+        qui count if missing(y)
+        local nmiss = r(N)
+        if `nmiss' > 0 {
+            di as error "Dropping the following silo_names for which y is missing:"
+            list silo_name if missing(y), noobs sepby(silo_name)
+            qui drop if missing(y)
+        }
     }
 
     // If use_pre_controls is toggled on, rearrange the data as necessary
@@ -186,28 +193,142 @@ program define undid_stage_three, rclass
     if `check_staggered' == 1 & `use_pre_controls' == 1 {
         qui egen double treated_time_silo = min(cond(treat==1, gvar_date, .)), by(silo_name)
         qui replace treat = 0 if treat == -1 & t < treated_time_silo
+        qui drop treated_time_silo
     }
 
     // Check that at least one treat and untreated diff exist for each sub-agg ATT computation, drop that sub-agg ATT if not
     // Also do some extra column creating for the dummy indiactors if agg == "time"
     if `check_staggered' == 1 {
         if "`agg'" == "none" {
-
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
-        else if "`agg'" == "g" {
-
+        if inlist("`agg'", "g", "silo") {
+            qui levelsof gvar, local(gvars)
+            foreach g of local gvars {
+                qui count if treat == 1 & gvar == "`g'"
+                local treated_count = r(N)
+                qui count if treat == 0 & gvar == "`g'"
+                local control_count = r(N)
+                if `treated_count' < 1 | `control_count' < 1 {
+                    di as err "Warning: Could not find at least one treated and one control observation for gvar = `g'."
+                    di as err "Warning: Dropping rows where gvar = `g'."
+                    qui drop if gvar == "`g'"
+                }
+            }
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
-        else if "`agg'" == "gt" {
-
+        if inlist("`agg'", "gt", "sgt") {
+            qui levelsof gt, local(gts)
+            foreach gt of local gts {
+                qui count if treat == 1 & gt == "`gt'"
+                local treated_count = r(N)
+                qui count if treat == 0 & gt == "`gt'"
+                local control_count = r(N)
+                if `treated_count' < 1 | `control_count' < 1 {
+                    di as err "Warning: Could not find at least one treated and one control observation for gt = `gt'."
+                    di as err "Warning: Dropping rows where gt = `gt'."
+                    qui drop if gt == "`gt'"
+                }
+            }
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
-        else if "`agg'" == "silo" {
-
+        if "`agg'" == "silo" {
+            qui levelsof silo_name if treat == 1, local(treated_silos)
+            local num_treated_silos : word count `treated_silos'
+            if `num_treated_silos' < 1 {
+                di as error "Error: Could not find any treated silos!"
+                exit 12
+            }
+            foreach s of local treated_silos {
+                qui levelsof gvar if silo_name == "`s'" & treat == 1, local(silo_gvar)
+                foreach g of local silo_gvar {
+                    // Implictly already determined that there will be at least one treated obs so can just count control obs
+                    qui count if treat == 0 & gvar == "`g'"
+                    local control_count = r(N)
+                    if `control_count' < 1 {
+                        di as err "Warning: Could not find at least one control obs where gvar = `g' to match to treat = 1 & silo_name = `s' & gvar = `g'."
+                        di as err "Warning: Dropping rows where treat = 1 & gvar == `g' & silo_name == `s'"
+                        qui drop if treat == 1 & gvar == "`g'" & silo_name == "`s'"
+                    }
+                }
+            }
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
-        else if "`agg'" == "sgt" {
-
+        if "`agg'" == "sgt" {
+            qui levelsof silo_name if treat == 1, local(treated_silos)
+            local num_treated_silos : word count `treated_silos'
+            if `num_treated_silos' < 1 {
+                di as error "Error: Could not find any treated silos!"
+                exit 12
+            }
+            foreach s of local treated_silos {
+                qui levelsof gt if silo_name == "`s'" & treat == 1, local(silo_gts)
+                foreach gt of local silo_gts {
+                    // Implictly already determined that there will be at least one treated obs so can just count control obs
+                    qui count if treat == 0 & gt == "`gt'"
+                    local control_count = r(N)
+                    if `control_count' < 1 {
+                        di as err "Warning: Could not find at least one control obs where gt = `gt' to match to treat = 1 & silo_name = `s' & gt = `gt'."
+                        di as err "Warning: Dropping rows where treat = 1 & gt == `gt' & silo_name == `s'"
+                        qui drop if treat == 1 & gt == "`gt'" & silo_name == "`s'"
+                    }
+                }
+            }
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
-        else if "`agg'" == "time" {
-
+        if "`agg'" == "time" {
+            qui gen double time = .
+            qui gen freq_n = real(word(freq, 1))
+            qui gen freq_unit = lower(word(freq, 2))
+            if substr(freq_unit, 1, 3) == "yea" {
+                qui replace time = floor((year(t) - year(gvar_date)) / freq_n)
+            }
+            else if substr(freq_unit, 1, 3) == "mon" {
+                qui replace time = floor((ym(year(t),  month(t)) - ym(year(gvar_date), month(gvar_date))) / freq_n)
+            }
+            else if substr(freq_unit, 1, 3) == "wee" {
+                qui replace time = floor((t - gvar_date) / (7 * freq_n))
+            }
+            else if substr(freq_unit, 1, 3) == "day" { 
+                qui replace time = floor((t - gvar_date) / freq_n)
+            }
+            qui drop freq_n
+            qui drop freq_unit
         }
     }
 
@@ -247,7 +368,22 @@ program define undid_stage_three, rclass
     }
 
     // Throw error if weights selection depends on n or n_t vals that are NA/missing
-    
+    if inlist("`weights'", "diff", "both") {
+        qui count if missing(n)
+        local n_missing = r(N)
+        if `n_missing' > 0 {
+            di as error "Error: missing counts of n which are required with weighting options: diff and both"
+            exit 13
+        }
+    }
+    if inlist("`weights'", "att", "both") {
+        qui count if missing(n_t)
+        local n_t_missing = r(N)
+        if `n_t_missing' > 0 {
+            di as error "Error: missing counts of n_t which are required with weighting options: att and both"
+            exit 14
+        }
+    }
 
     qui save "`master'", replace
     qui frame change default

@@ -47,10 +47,14 @@ foreach s of local states {
     
     // Reload the full data each time, then filter
     use "test_dta_files\merit.dta", clear
+	if `s' == 59 {
+		keep if year != 1999
+	}
     tostring year, replace
     
     // Keep only the current state
     keep if state == `s'
+	
 undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name("`s'") time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'")
 }
 

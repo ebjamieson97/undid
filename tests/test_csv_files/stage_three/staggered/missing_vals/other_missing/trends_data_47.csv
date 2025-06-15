@@ -1,0 +1,13 @@
+silo_name,treatment_time,time,mean_outcome,mean_outcome_residualized,covariates,date_format,freq
+47,control,1989,.5789473684210527,.2578184591914569,asian;black;male,yyyy,1 year
+47,control,1990,.5471698113207547,.3432510885341074,asian;black;male,yyyy,1 year
+47,control,1991,.42,.1823076923076923,asian;black;male,yyyy,1 year
+47,control,1992,.5217391304347826,.217391304347826,asian;black;male,yyyy,1 year
+47,control,1993,.3617021276595745,.1914893617021276,asian;black;male,yyyy,1 year
+47,control,1994,.6382978723404256,.34735279564572,asian;black;male,yyyy,1 year
+47,control,1995,.3863636363636364,.1696156192800488,asian;black;male,yyyy,1 year
+47,control,1996,.5609756097560976,.1810506566604127,asian;black;male,yyyy,1 year
+47,control,1997,.3958333333333333,.2361111111111111,asian;black;male,yyyy,1 year
+47,control,1998,.5,.2673319327731092,asian;black;male,yyyy,1 year
+47,control,1999,.5925925925925926,.3148148148148149,asian;black;male,yyyy,1 year
+47,control,2000,.5531914893617021,.3404255319148936,asian;black;male,yyyy,1 year

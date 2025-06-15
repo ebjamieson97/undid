@@ -42,8 +42,8 @@ if _rc {
 set tracedepth 1
 
 // actually turn tracing on
-set trace on
-undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered") use_pre_controls(1)
+set trace off
+undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered\\missing_vals\\other_missing") use_pre_controls(1) agg("sgt")
 
 set trace off
 
