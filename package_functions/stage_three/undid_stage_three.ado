@@ -60,6 +60,7 @@ program define undid_stage_three, rclass
     }
     else if !inlist("`weights'", "none", "diff", "att", "both") {
         di as error "Error: weights must be either blank or one of: none, diff, att, both."
+        exit 15
     }
     
     // ---------------------------------------------------------------------------------------- //
@@ -197,9 +198,13 @@ program define undid_stage_three, rclass
     }
 
     // Check that at least one treat and untreated diff exist for each sub-agg ATT computation, drop that sub-agg ATT if not
-    // Also do some extra column creating for the dummy indiactors if agg == "time"
+    // Also do some extra processing if agg == "time" then create the time column which indicates periods since treatment
     if `check_staggered' == 1 {
         if "`agg'" == "none" {
+            if inlist("`weights'", "att", "both") {
+                di as err "Warning: weighting methods 'att' and 'both' are not applicable to aggregation method of 'none' as they apply weights to sub-aggregate ATTs which are not caluclated with 'agg = none'. Overwriting weights to 'diff'."
+                local weights "diff"
+            }
             qui count if treat == 1
             local treated_count = r(N)
             qui count if treat == 0
@@ -329,6 +334,26 @@ program define undid_stage_three, rclass
             }
             qui drop freq_n
             qui drop freq_unit
+            qui levelsof time, local(time_groups)
+            foreach time_g of local time_groups {
+                qui count if treat == 1 & time == `time_g'
+                local treated_count = r(N)
+                qui count if treat == 0 & time == `time_g'
+                local control_count = r(N)
+                if `treated_count' < 1 | `control_count' < 1 {
+                    di as err "Warning: Could not find at least one treated and one control obs for periods since treatment: `time_g'."
+                    di as err "Dropping all rows where periods since treatment = `time_g'."
+                    qui drop if time == `time_g'
+                }
+            }
+            qui count if treat == 1
+            local treated_count = r(N)
+            qui count if treat == 0
+            local control_count = r(N)
+            if `treated_count' < 1 | `control_count' < 1 {
+                di as err "Error: Need at least one treated and one control observation."
+                exit 11
+            }
         }
     }
 
@@ -385,16 +410,120 @@ program define undid_stage_three, rclass
         }
     }
 
-    qui save "`master'", replace
-    qui frame change default
-    use "`master'", clear
+    // After all the pre-processing checks are done, can finally move on to regressions
 
-describe
-browse
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART THREE: Compute Results ------------------------------- // 
     // ---------------------------------------------------------------------------------------- //
+
+    // Create a column of ones for the regressions
+    qui gen byte const = 1
+
+    // Define some tempnames for scalars for the aggregate levels results 
+    qui tempname agg_att 
+    qui tempname agg_att_se 
+    qui tempname agg_att_jknife_se 
+    qui tempname agg_att_pval 
+    qui tempname agg_att_jknife_pval
+    qui tempname agg_att_tstat
+    qui tempname agg_att_tstat_jknife
+    qui tempname agg_att_dof
+    
+    // For storing counts and other scalars
+    qui tempname total_n
+    qui tempname total_n_t
+    qui tempname sub_agg_dof
+    qui tempname sub_agg_tstat
+
+    // Define some locals to store the sub-aggregate level results
+    local sub_agg_label ""
+    local sub_agg_atts ""
+    local sub_agg_atts_se ""
+    local sub_agg_atts_pval ""
+    local sub_agg_atts_jknife ""
+    local sub_agg_atts_jknife_pval ""
+    local sub_agg_atts_ri_pval ""
+    local sub_agg_weights ""
+
+    if "`agg'" == "none" {
+        if "`weights'" == "diff" {
+            qui sum n 
+            qui scalar `total_n' = r(sum)
+            qui gen w = n / `total_n'
+            qui gen double sw = sqrt(w)
+            qui replace y = y * sw
+            qui replace treat = treat * sw
+            qui replace const = const * sw
+        }
+        qui reg y const treat if treat >= 0, noconstant vce(robust)
+        qui scalar `agg_att' = _b[treat]
+        qui scalar `agg_att_se' = _se[treat]
+        qui scalar `agg_att_dof' = e(df_r)
+        qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+        qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+        qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+        qui scalar `agg_att_jknife_se' = _se[treat]
+        qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+        qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+    } 
+    else if "`agg'" == "g" {
+        qui levelsof gvar, local(gvars)
+        foreach g of local gvars {
+            preserve 
+            qui keep if gvar == "`g'"
+            if inlist("`weights'", "diff", "both") {
+                qui sum n
+                qui scalar `total_n' = r(sum)
+                qui gen w = n / `total_n'
+                qui gen double sw = sqrt(w)
+                qui replace y = y * sw
+                qui replace treat = treat * sw
+                qui replace const = const * sw
+            }
+
+            if inlist("`weights'", "att", "both") {
+                qui sum n_t
+                qui scalar `total_n_t' = r(sum)
+                local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
+            }
+            else {
+                local sub_agg_weights "`sub_agg_weights' ."
+            }
+            
+            qui reg y const treat if treat >= 0, noconstant vce(robust)
+            local sub_agg_att = _b[treat]
+            local sub_agg_att_se = _se[treat]
+            qui scalar `sub_agg_dof' = e(df_r)
+            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+            local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            
+            qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+            local sub_agg_att_jknife = _se[treat]
+            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+            local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+
+            local sub_agg_label "`sub_agg_label' `g'"
+            local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
+            local sub_agg_atts_se "`sub_agg_atts_se' `sub_agg_att_se'"
+            local sub_agg_atts_pval "`sub_agg_atts_pval' `sub_agg_att_pval'"
+            local sub_agg_atts_jknife "`sub_agg_atts_jknife' `sub_agg_att_jknife'"
+            local sub_agg_atts_jknife_pval "`sub_agg_atts_jknife_pval' `sub_agg_att_jknife_pval'"
+            restore
+        }
+    }
+    else if "`agg'" == "gt" {
+        
+    }
+    else if "`agg'" == "silo" {
+        
+    }
+    else if "`agg'" == "sgt" {
+        
+    }
+    else if "`agg'" == "time" {
+        
+    }
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART FOUR: Randomization Inference ------------------------ // 
@@ -407,8 +536,111 @@ browse
     // ok maybe that doesn't matter actually since its just simply never entered into the computations...
 
     // ---------------------------------------------------------------------------------------- //
-    // ---------------------------- PART FIVE: Return and Display Results --------------------- // 
+    // -------- PART FIVE: Return and Display Results, and Compute Aggregate Values ----------- // 
     // ---------------------------------------------------------------------------------------- //
+
+    if "`agg'" != "none" {
+        di as text "-----------------------------------------------------------------------------------------------------"
+		di as text "                                     undid: Sub-Aggregate Results                    "
+		di as text "-----------------------------------------------------------------------------------------------------"
+		di as text "Sub-Aggregate Group       | " as text "ATT             | SE     | p-val  | JKNIFE SE  | JKNIFE p-val | RI p-val"
+		di as text "--------------------------|-----------------|--------|--------|------------|--------------|---------|"  
+		
+		// Initialize a temporary matrix to store the numeric results
+        tempname weight_total
+        qui scalar `weight_total' = 0
+        tempname table_matrix
+        local nrows : word count `sub_agg_label'  
+        local num_cols = 7
+        matrix `table_matrix' = J(`nrows', `num_cols', .)
+		
+		forvalues i = 1/`nrows' {
+            local lbl     : word `i' of `sub_agg_label'
+            local att     : word `i' of `sub_agg_atts'
+            local se      : word `i' of `sub_agg_atts_se'
+            local pval    : word `i' of `sub_agg_atts_pval'
+            local jse     : word `i' of `sub_agg_atts_jknife'
+            local jpval   : word `i' of `sub_agg_atts_jknife_pval'
+            local sub_agg_weight : word `i' of `sub_agg_weights'
+			di as text %-25s "`lbl'" as text " |" as result %-16.7f real("`att'") as text " | " as result  %-7.3f real("`se'") as text "| " as result %-7.3f real("`pval'") as text "| " as result  %-11.3f real("`jse'") as text "| " as result %-13.3f real("`jpval'") as text "|" as result %-9.3f "." as text "|"
+    
+			di as text "--------------------------|-----------------|--------|--------|------------|--------------|---------|"
+            
+            // Fill the matrix with numeric values
+            matrix `table_matrix'[`i', 1] = real("`att'")
+            matrix `table_matrix'[`i', 2] = real("`se'")
+            matrix `table_matrix'[`i', 3] = real("`pval'")
+            matrix `table_matrix'[`i', 4] = real("`jse'")
+            matrix `table_matrix'[`i', 5] = real("`jpval'")
+            // matrix `table_matrix'[`i', 6] = `tmp_ri_pval_att_t'[`i']
+            matrix `table_matrix'[`i', 7]  = .
+            
+            qui scalar `weight_total' = `weight_total' + `sub_agg_weight'
+		}
+
+        if inlist("`weights'", "att", "both") {
+            forvalues i = 1/`nrows' {
+                local sub_agg_weight : word `i' of `sub_agg_weights'
+                matrix `table_matrix'[`i', 7] = `sub_agg_weight' / `weight_total'
+            } 
+        }
+
+		// Set column names for the matrix
+        matrix colnames `table_matrix' = ATT SE pval JKNIFE_SE JKNIFE_pval RI_pval W
+        
+        // Set row names for the matrix using the labels
+        matrix rownames `table_matrix' = `sub_agg_label'
+        
+        // Compute aggregate results
+        clear
+        qui svmat double `table_matrix', names(col)
+        qui gen byte const = 1
+        if inlist("`weights'", "att", "both") {
+            qui gen double sw = sqrt(W)
+            qui replace ATT = ATT * sw
+            qui replace const = const * sw
+        }
+        qui reg ATT const, noconstant vce(robust)
+        qui scalar `agg_att' = _b[const]
+        qui scalar `agg_att_se' = _se[const]
+        qui scalar `agg_att_dof' = e(df_r)
+        qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+        qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+        qui reg ATT const, noconstant vce(jackknife)
+        qui scalar `agg_att_jknife_se' = _se[const]
+        qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+        qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+
+        // Store the matrix in r()
+        return matrix undid = `table_matrix'
+
+		local linesize = c(linesize)
+		if `linesize' < 103 {
+			di as text "Results table may be squished, try expanding Stata results window."
+		}
+    }
+
+    di as text _n "------------------------------"
+    di as text "   undid: Aggregate Results"
+    di as text "------------------------------"
+    di as text "Aggregation: `agg'"
+    di as text "Weighting: `weights'"
+    di as text "Aggregate ATT: " as result `agg_att'
+    di as text "Standard error: " as result `agg_att_se'
+    di as text "p-value: " as result `agg_att_pval'
+    di as text "Jackknife SE: " as result `agg_att_jknife_se'
+    di as text "Jackknife p-value: " as result `agg_att_jknife_pval'
+    di as text "RI p-value: " as result ""
+
+    return scalar att = `agg_att'
+    return scalar se = `agg_att_se'
+    return scalar p = `agg_att_pval'
+    return scalar jkse = `agg_att_jknife_se'
+    return scalar jkp = `agg_att_jknife_pval'
+    // return scalar rip = `tmp_ri_pval_agg_att'[1]
+
+    qui frame change default
+
 
 end
 
