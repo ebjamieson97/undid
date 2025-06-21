@@ -19,10 +19,10 @@ d
 d
 f package_functions/helpers/_parse_string_to_date.ado
 f package_functions/helpers/_parse_date_to_string.ado
-f package_functions/stage_one/create_init_csv.ado
-f package_functions/stage_one/create_init_csv.sthlp
-f package_functions/stage_one/create_diff_df.ado
-f package_functions/stage_one/create_diff_df.sthlp
+f package_functions/stage_one/undid_init.ado
+f package_functions/stage_one/undid_init.sthlp
+f package_functions/stage_one/undid_diff.ado
+f package_functions/stage_one/undid_diff.sthlp
 f package_functions/stage_two/undid_stage_two.ado
 f package_functions/stage_two/undid_stage_two.sthlp
 f package_functions/stage_three/undid_stage_three.ado

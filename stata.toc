@@ -1,6 +1,6 @@
 v 3
 p undid Difference-in-differences with unpoolable data
-p create_init_csv Creates the init.csv
-p create_diff_df Creates the empty_diff_df.csv
+p undid_init Creates the init.csv
+p undid_diff Creates the empty_diff_df.csv
 p undid_stage_two Runs stage two procedures
 p undid_stage_three Computes sub-aggregate and aggregate ATTs, standard errors, etc.

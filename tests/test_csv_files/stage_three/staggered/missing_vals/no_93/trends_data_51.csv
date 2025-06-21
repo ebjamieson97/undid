@@ -1,12 +1,12 @@
-silo_name,treatment_time,time,mean_outcome,mean_outcome_residualized,covariates,date_format,freq
-51,control,1989,.3870967741935484,.2274193548387097,asian;black;male,yyyy,1 year
-51,control,1990,.3870967741935484,.3390528483184626,asian;black;male,yyyy,1 year
-51,control,1991,.375,.2604166666666667,asian;black;male,yyyy,1 year
-51,control,1992,.4333333333333333,.1133333333333333,asian;black;male,yyyy,1 year
-51,control,1994,.5428571428571428,.2310559006211181,asian;black;male,yyyy,1 year
-51,control,1995,.5714285714285714,.2476190476190476,asian;black;male,yyyy,1 year
-51,control,1996,.3870967741935484,.1672152732060566,asian;black;male,yyyy,1 year
-51,control,1997,.4722222222222222,.2152777777777778,asian;black;male,yyyy,1 year
-51,control,1998,.3,.1,asian;black;male,yyyy,1 year
-51,control,1999,.4444444444444444,.1673052362707535,asian;black;male,yyyy,1 year
-51,control,2000,.5384615384615384,.2666378565254969,asian;black;male,yyyy,1 year
+silo_name,treatment_time,time,mean_outcome,mean_outcome_residualized,covariates,date_format,freq,n
+51,control,1989,.3870967741935484,.2274193548387097,asian;black;male,yyyy,1 year,31
+51,control,1990,.3870967741935484,.3390528483184626,asian;black;male,yyyy,1 year,31
+51,control,1991,.375,.2604166666666667,asian;black;male,yyyy,1 year,24
+51,control,1992,.4333333333333333,.1133333333333333,asian;black;male,yyyy,1 year,30
+51,control,1994,.5428571428571428,.2310559006211181,asian;black;male,yyyy,1 year,35
+51,control,1995,.5714285714285714,.2476190476190476,asian;black;male,yyyy,1 year,28
+51,control,1996,.3870967741935484,.1672152732060566,asian;black;male,yyyy,1 year,31
+51,control,1997,.4722222222222222,.2152777777777778,asian;black;male,yyyy,1 year,36
+51,control,1998,.3,.1,asian;black;male,yyyy,1 year,30
+51,control,1999,.4444444444444444,.1673052362707535,asian;black;male,yyyy,1 year,27
+51,control,2000,.5384615384615384,.2666378565254969,asian;black;male,yyyy,1 year,26

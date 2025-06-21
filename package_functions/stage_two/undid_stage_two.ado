@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_two*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-06-13 */
+/*version 1.0.0 2025-06-16 */
 /*------------------------------------*/
 cap program drop undid_stage_two
 program define undid_stage_two
