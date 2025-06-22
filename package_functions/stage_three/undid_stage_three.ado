@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_three*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-05-04 */
+/*version 0.0.1 2025-06-22 */
 /*------------------------------------*/
 cap program drop undid_stage_three
 program define undid_stage_three, rclass
@@ -98,6 +98,9 @@ program define undid_stage_three, rclass
     qui use "`master'", clear
     // Grab date format
     local date_format = date_format[1]
+    if `get_weights' == 1 {
+        local weights = weights[1]
+    }
 
     // Check if staggered or common adoption
     local expected_common "silo_name treat common_treatment_time start_time end_time weights diff_estimate diff_var diff_estimate_covariates diff_var_covariates covariates date_format freq n n_t anonymize_size"
@@ -447,6 +450,8 @@ program define undid_stage_three, rclass
     local sub_agg_weights ""
 
     if "`agg'" == "none" {
+        // Still need to add functionality with common adoption (and its edge case)
+        // Basically, should manually calculate the edge case for common adoption
         if "`weights'" == "diff" {
             qui sum n 
             qui scalar `total_n' = r(sum)
@@ -458,14 +463,34 @@ program define undid_stage_three, rclass
         }
         qui reg y const treat if treat >= 0, noconstant vce(robust)
         qui scalar `agg_att' = _b[treat]
-        qui scalar `agg_att_se' = _se[treat]
         qui scalar `agg_att_dof' = e(df_r)
-        qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
-        qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
-        qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-        qui scalar `agg_att_jknife_se' = _se[treat]
-        qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
-        qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+        qui count if treat > 0
+        local treated_obs = r(N)
+        qui count if treat == 0 
+        local control_obs = r(N)
+        if `treated_obs' + `control_obs' == 2 {
+            if `check_staggered' == 1 {
+                qui scalar `agg_att_se' = .
+                qui scalar `agg_att_pval' = .
+                qui scalar `agg_att_jknife_se' = .
+                qui scalar `agg_att_jknife_pval' = .
+            }
+            else if `check_common' == 1 {
+                // Can manually compute standard error here, but not pval
+            }
+        }
+        else {
+            qui scalar `agg_att_se' = _se[treat]
+            qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+            qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+            qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+            if `treated_obs' > 1 & `control_obs' > 1 {
+                qui scalar `agg_att_dof' = `agg_att_dof' + 1
+            }
+            qui scalar `agg_att_jknife_se' = _se[treat]
+            qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+            qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+        }
     } 
     else if "`agg'" == "g" {
         qui levelsof gvar, local(gvars)
@@ -493,15 +518,45 @@ program define undid_stage_three, rclass
             
             qui reg y const treat if treat >= 0, noconstant vce(robust)
             local sub_agg_att = _b[treat]
-            local sub_agg_att_se = _se[treat]
             qui scalar `sub_agg_dof' = e(df_r)
-            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-            local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            if `sub_agg_dof' > 0 {
+                local sub_agg_att_se = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }
+            else {
+                local sub_agg_att_se "."
+                local sub_agg_att_pval "."
+            }
             
-            qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-            local sub_agg_att_jknife = _se[treat]
-            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-            local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            qui count if treat > 0
+            local treated_obs = r(N)
+            qui count if treat == 0
+            local control_obs = r(N)
+            if !(`treated_obs' > 1 & `control_obs' > 1) {
+                if `treated_obs' == 1 & `control_obs' == 1 {
+                    local sub_agg_att_jknife "."
+                    local sub_agg_att_jknife_pval "."
+                }
+                else {
+                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                    local sub_agg_att_jknife = _se[treat] 
+                    if `sub_agg_dof' > 0 {
+                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                    }
+                    else {
+                        local sub_agg_att_jknife_pval "."
+                    }
+                }
+            }
+            else {
+                qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                local sub_agg_att_jknife = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }      
 
             local sub_agg_label "`sub_agg_label' `g'"
             local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
@@ -513,27 +568,320 @@ program define undid_stage_three, rclass
         }
     }
     else if "`agg'" == "gt" {
-        
+        qui levelsof gt, local(gts)
+        foreach gt of local gts {
+            preserve
+            qui keep if gt == "`gt'"
+            if inlist("`weights'", "diff", "both") {
+                qui sum n
+                qui scalar `total_n' = r(sum)
+                qui gen w = n / `total_n'
+                qui gen double sw = sqrt(w)
+                qui replace y = y * sw
+                qui replace treat = treat * sw
+                qui replace const = const * sw
+            }
+
+            if inlist("`weights'", "att", "both") {
+                qui sum n_t
+                qui scalar `total_n_t' = r(sum)
+                local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
+            }
+            else {
+                local sub_agg_weights "`sub_agg_weights' ."
+            }
+            
+            qui reg y const treat if treat >= 0, noconstant vce(robust)
+            local sub_agg_att = _b[treat]
+            qui scalar `sub_agg_dof' = e(df_r)
+            if `sub_agg_dof' > 0 {
+                local sub_agg_att_se = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }
+            else {
+                local sub_agg_att_se "."
+                local sub_agg_att_pval "."
+            }
+            
+            qui count if treat > 0
+            local treated_obs = r(N)
+            qui count if treat == 0
+            local control_obs = r(N)
+            if !(`treated_obs' > 1 & `control_obs' > 1) {
+                if `treated_obs' == 1 & `control_obs' == 1 {
+                    local sub_agg_att_jknife "."
+                    local sub_agg_att_jknife_pval "."
+                }
+                else {
+                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                    local sub_agg_att_jknife = _se[treat] 
+                    if `sub_agg_dof' > 0 {
+                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                    }
+                    else {
+                        local sub_agg_att_jknife_pval "."
+                    }
+                }
+            }
+            else {
+                qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                local sub_agg_att_jknife = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }            
+
+            local sub_agg_label "`sub_agg_label' `gt'"
+            local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
+            local sub_agg_atts_se "`sub_agg_atts_se' `sub_agg_att_se'"
+            local sub_agg_atts_pval "`sub_agg_atts_pval' `sub_agg_att_pval'"
+            local sub_agg_atts_jknife "`sub_agg_atts_jknife' `sub_agg_att_jknife'"
+            local sub_agg_atts_jknife_pval "`sub_agg_atts_jknife_pval' `sub_agg_att_jknife_pval'"
+            restore
+        }
     }
     else if "`agg'" == "silo" {
-        
+        qui levelsof silo_name if treat == 1, local(silos)
+        foreach s of local silos {
+            preserve
+            qui levelsof gvar if silo_name == "`s'" & treat == 1, local(g)
+            qui keep if ((silo_name == "`s'" & treat == 1) | (treat == 0 & gvar == `g' & silo_name != "`s'"))
+            if inlist("`weights'", "diff", "both") {
+                qui sum n
+                qui scalar `total_n' = r(sum)
+                qui gen w = n / `total_n'
+                qui gen double sw = sqrt(w)
+                qui replace y = y * sw
+                qui replace treat = treat * sw
+                qui replace const = const * sw
+            }
+
+            if inlist("`weights'", "att", "both") {
+                qui sum n_t
+                qui scalar `total_n_t' = r(sum)
+                local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
+            }
+            else {
+                local sub_agg_weights "`sub_agg_weights' ."
+            }
+            
+            qui reg y const treat if treat >= 0, noconstant vce(robust)
+            local sub_agg_att = _b[treat]
+            qui scalar `sub_agg_dof' = e(df_r)
+            if `sub_agg_dof' > 0 {
+                local sub_agg_att_se = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }
+            else {
+                local sub_agg_att_se "."
+                local sub_agg_att_pval "."
+            }
+            
+            qui count if treat > 0
+            local treated_obs = r(N)
+            qui count if treat == 0
+            local control_obs = r(N)
+            if !(`treated_obs' > 1 & `control_obs' > 1) {
+                if `treated_obs' == 1 & `control_obs' == 1 {
+                    local sub_agg_att_jknife "."
+                    local sub_agg_att_jknife_pval "."
+                }
+                else {
+                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                    local sub_agg_att_jknife = _se[treat] 
+                    if `sub_agg_dof' > 0 {
+                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                    }
+                    else {
+                        local sub_agg_att_jknife_pval "."
+                    }
+                }
+            }
+            else {
+                qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                local sub_agg_att_jknife = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }            
+
+            local sub_agg_label "`sub_agg_label' `s'"
+            local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
+            local sub_agg_atts_se "`sub_agg_atts_se' `sub_agg_att_se'"
+            local sub_agg_atts_pval "`sub_agg_atts_pval' `sub_agg_att_pval'"
+            local sub_agg_atts_jknife "`sub_agg_atts_jknife' `sub_agg_att_jknife'"
+            local sub_agg_atts_jknife_pval "`sub_agg_atts_jknife_pval' `sub_agg_att_jknife_pval'"
+            restore
+        }        
     }
     else if "`agg'" == "sgt" {
-        
+        qui levelsof silo_name if treat == 1, local(silos)
+        foreach s of local silos {
+            qui levelsof gt if silo_name == "`s'" & treat == 1, local(gts)
+            foreach gt of local gts {
+                preserve
+                qui keep if ((silo_name == "`s'" & treat == 1 & gt == "`gt'") | (treat == 0 & gt == "`gt'" & silo_name != "`s'"))
+                if inlist("`weights'", "diff", "both") {
+                    qui sum n
+                    qui scalar `total_n' = r(sum)
+                    qui gen w = n / `total_n'
+                    qui gen double sw = sqrt(w)
+                    qui replace y = y * sw
+                    qui replace treat = treat * sw
+                    qui replace const = const * sw
+                }
+
+                if inlist("`weights'", "att", "both") {
+                    qui sum n_t
+                    qui scalar `total_n_t' = r(sum)
+                    local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
+                }
+                else {
+                    local sub_agg_weights "`sub_agg_weights' ."
+                }
+
+                qui reg y const treat if treat >= 0, noconstant vce(robust)
+                local sub_agg_att = _b[treat]
+                qui scalar `sub_agg_dof' = e(df_r)
+                if `sub_agg_dof' > 0 {
+                    local sub_agg_att_se = _se[treat]
+                    qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                    local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                }
+                else {
+                    local sub_agg_att_se "."
+                    local sub_agg_att_pval "."
+                }
+
+                qui count if treat > 0
+                local treated_obs = r(N)
+                qui count if treat == 0
+                local control_obs = r(N)
+                if !(`treated_obs' > 1 & `control_obs' > 1) {
+                    if `treated_obs' == 1 & `control_obs' == 1 {
+                        local sub_agg_att_jknife "."
+                        local sub_agg_att_jknife_pval "."
+                    }
+                    else {
+                        qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                        local sub_agg_att_jknife = _se[treat] 
+                        if `sub_agg_dof' > 0 {
+                            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                            local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                        }
+                        else {
+                            local sub_agg_att_jknife_pval "."
+                        }
+                    }
+                }
+                else {
+                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
+                    local sub_agg_att_jknife = _se[treat]
+                    qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                    qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                    local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                }            
+
+                local sub_agg_label "`sub_agg_label' "`s'_`gt'""
+                local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
+                local sub_agg_atts_se "`sub_agg_atts_se' `sub_agg_att_se'"
+                local sub_agg_atts_pval "`sub_agg_atts_pval' `sub_agg_att_pval'"
+                local sub_agg_atts_jknife "`sub_agg_atts_jknife' `sub_agg_att_jknife'"
+                local sub_agg_atts_jknife_pval "`sub_agg_atts_jknife_pval' `sub_agg_att_jknife_pval'"
+                restore
+            }  
+        }        
     }
     else if "`agg'" == "time" {
-        
+        qui levelsof time, local(times)
+        foreach t of local times {
+            preserve
+            qui keep if time == `t' & treat >= 0
+            if inlist("`weights'", "diff", "both") {
+                qui sum n
+                qui scalar `total_n' = r(sum)
+                qui gen w = n / `total_n'
+                qui gen double sw = sqrt(w)
+                qui replace y = y * sw
+                qui replace treat = treat * sw
+                qui replace const = const * sw
+            }
+
+            if inlist("`weights'", "att", "both") {
+                qui sum n_t
+                qui scalar `total_n_t' = r(sum)
+                local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
+            }
+            else {
+                local sub_agg_weights "`sub_agg_weights' ."
+            }
+
+            qui count if treat > 0
+            local treated_obs = r(N)
+            qui count if treat == 0
+            local control_obs = r(N)
+            
+            qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(robust)
+            local sub_agg_att = _b[treat]
+            if `treated_obs' + `control_obs' > 2 {
+                local sub_agg_att_se = _se[treat]
+            }
+            else {
+                local sub_agg_att_se = "."
+            }
+            qui scalar `sub_agg_dof' = e(df_r)
+            if `sub_agg_dof' > 0 {
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }
+            else {
+                local sub_agg_att_pval "."
+            }
+
+            if !(`treated_obs' > 1 & `control_obs' > 1) {
+                if `treated_obs' == 1 & `control_obs' == 1 {
+                    local sub_agg_att_jknife "."
+                    local sub_agg_att_jknife_pval "."
+                }
+                else {
+                    qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                    local sub_agg_att_jknife = _se[treat] 
+                    qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 2
+                    if `sub_agg_dof' > 0 {
+                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                    }
+                    else {
+                        local sub_agg_att_jknife_pval "."
+                    }
+                }
+            }
+            else {
+                qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                local sub_agg_att_jknife = _se[treat]
+                qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 1
+                local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+            }            
+
+            local sub_agg_label "`sub_agg_label' `t'"
+            local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
+            local sub_agg_atts_se "`sub_agg_atts_se' `sub_agg_att_se'"
+            local sub_agg_atts_pval "`sub_agg_atts_pval' `sub_agg_att_pval'"
+            local sub_agg_atts_jknife "`sub_agg_atts_jknife' `sub_agg_att_jknife'"
+            local sub_agg_atts_jknife_pval "`sub_agg_atts_jknife_pval' `sub_agg_att_jknife_pval'"
+            restore
+        }
     }
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART FOUR: Randomization Inference ------------------------ // 
     // ---------------------------------------------------------------------------------------- //
 
-    // Note that if some rows were dropped for staggered adoption this likely skews the interpretation
-    // of the randomization inference procedure, especially for agg at the gt or sgt level : if 
-    // for example gt of (2000,2000) was dropped for Silo A and there is only one t for that g, 
-    // then Silo A can never be assigned as a control (or treat) in subsequent randomizations..
-    // ok maybe that doesn't matter actually since its just simply never entered into the computations...
 
     // ---------------------------------------------------------------------------------------- //
     // -------- PART FIVE: Return and Display Results, and Compute Aggregate Values ----------- // 
@@ -552,7 +900,7 @@ program define undid_stage_three, rclass
         tempname table_matrix
         local nrows : word count `sub_agg_label'  
         local num_cols = 7
-        matrix `table_matrix' = J(`nrows', `num_cols', .)
+        qui matrix `table_matrix' = J(`nrows', `num_cols', .)
 		
 		forvalues i = 1/`nrows' {
             local lbl     : word `i' of `sub_agg_label'
@@ -647,4 +995,4 @@ end
 /*--------------------------------------*/
 /* Change Log */
 /*--------------------------------------*/
-*1.0.0 - created function
+*0.0.1 - created function
