@@ -38,15 +38,14 @@ if _rc {
 * make sure proper error messages display
 * ensure outputted csv files are correct
 * ---------------------------------------------- *
-// show trace for up to, say, 3 levels of calls
+// show trace for up to, say, 1 levels of calls
 
-set trace off
+set trace on
 set tracedepth 1
-// actually turn tracing on
-
-undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered") 
-matrix list r(undid)
 set trace off
+undid_stage_three, dir_path("C:\\Users\\Eric Bruce Jamieson\\Documents\\Dalhousie Work\\undid\\tests\\test_csv_files\\stage_three\\staggered") agg("time")
+
+
 
 
 

@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_three*/
 /*written by Eric Jamieson */
-/*version 0.0.1 2025-06-22 */
+/*version 0.0.1 2025-08-03 */
 /*------------------------------------*/
 cap program drop undid_stage_three
 program define undid_stage_three, rclass
@@ -370,6 +370,10 @@ program define undid_stage_three, rclass
             di as err "Error: Need at least one treated and one control observation."
             exit 11
         }
+        if (!inlist("`agg'", "silo", "sgt")) & inlist("`weights'", "att", "both") {
+            di as error "Warning: weighting methods 'att' and 'both' are only applicable to aggregation method of 'silo' or 'sgt' for common adoption scenarios as they apply weights to sub-aggregate ATTs which are not caluclated in a common adoption scenario when agg is any of 'g', 'gt', 'time', or 'none'. Overwriting weights to 'diff'."
+            local weights "diff"
+        }
         qui levelsof silo_name if treat == 1, local(treated_silos)
         local num_treated_silos : word count `treated_silos'
         if `num_treated_silos' == 1 {
@@ -389,8 +393,38 @@ program define undid_stage_three, rclass
             if inlist("`agg'", "g", "gt", "time") {
                 local agg "none"
             }
-            else if "`agg'" == "sgt" {
+            else if inlist("`agg'", "sgt", "silo") {
                 local agg "silo"
+                qui rename common_treatment_time gvar
+                qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date)
+                // This is the same check used in the staggered checks block preceding this section: 
+                qui levelsof silo_name if treat == 1, local(treated_silos)
+                local num_treated_silos : word count `treated_silos'
+                if `num_treated_silos' < 1 {
+                    di as error "Error: Could not find any treated silos!"
+                    exit 12
+                }
+                foreach s of local treated_silos {
+                    qui levelsof gvar if silo_name == "`s'" & treat == 1, local(silo_gvar)
+                    foreach g of local silo_gvar {
+                        // Implictly already determined that there will be at least one treated obs so can just count control obs
+                        qui count if treat == 0 & gvar == "`g'"
+                        local control_count = r(N)
+                        if `control_count' < 1 {
+                            di as err "Warning: Could not find at least one control obs where gvar = `g' to match to treat = 1 & silo_name = `s' & gvar = `g'."
+                            di as err "Warning: Dropping rows where treat = 1 & gvar == `g' & silo_name == `s'"
+                            qui drop if treat == 1 & gvar == "`g'" & silo_name == "`s'"
+                        }
+                    }
+                }
+                qui count if treat == 1
+                local treated_count = r(N)
+                qui count if treat == 0
+                local control_count = r(N)
+                if `treated_count' < 1 | `control_count' < 1 {
+                    di as err "Error: Need at least one treated and one control observation."
+                    exit 11
+                }
             }
         }
     }
@@ -468,7 +502,7 @@ program define undid_stage_three, rclass
         local treated_obs = r(N)
         qui count if treat == 0 
         local control_obs = r(N)
-        if `treated_obs' + `control_obs' == 2 {
+        if `treated_obs' + `control_obs' == 2 { //Only two obs - can't compute standard errors for staggered?
             if `check_staggered' == 1 {
                 qui scalar `agg_att_se' = .
                 qui scalar `agg_att_pval' = .
@@ -479,14 +513,19 @@ program define undid_stage_three, rclass
                 // Can manually compute standard error here, but not pval
             }
         }
+        else if `treated_obs' == 1 | `control_obs' == 1 { // If only one of treated_obs or control_obs, can't compute jackknife
+                qui scalar `agg_att_se' = _se[treat]
+                qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+                qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+                qui scalar `agg_att_jknife_se' = .
+                qui scalar `agg_att_jknife_pval' = .
+        }
         else {
             qui scalar `agg_att_se' = _se[treat]
             qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
             qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
             qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-            if `treated_obs' > 1 & `control_obs' > 1 {
-                qui scalar `agg_att_dof' = `agg_att_dof' + 1
-            }
+            qui scalar `agg_att_dof' = `agg_att_dof' + 1
             qui scalar `agg_att_jknife_se' = _se[treat]
             qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
             qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
@@ -508,7 +547,7 @@ program define undid_stage_three, rclass
             }
 
             if inlist("`weights'", "att", "both") {
-                qui sum n_t
+                qui sum n_t if treat > 0 
                 qui scalar `total_n_t' = r(sum)
                 local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
             }
@@ -534,7 +573,7 @@ program define undid_stage_three, rclass
             qui count if treat == 0
             local control_obs = r(N)
             if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 & `control_obs' == 1 {
+                if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
                 }
@@ -583,7 +622,7 @@ program define undid_stage_three, rclass
             }
 
             if inlist("`weights'", "att", "both") {
-                qui sum n_t
+                qui sum n_t if treat > 0
                 qui scalar `total_n_t' = r(sum)
                 local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
             }
@@ -609,7 +648,7 @@ program define undid_stage_three, rclass
             qui count if treat == 0
             local control_obs = r(N)
             if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 & `control_obs' == 1 {
+                if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
                 }
@@ -659,7 +698,7 @@ program define undid_stage_three, rclass
             }
 
             if inlist("`weights'", "att", "both") {
-                qui sum n_t
+                qui sum n_t if treat > 0
                 qui scalar `total_n_t' = r(sum)
                 local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
             }
@@ -685,7 +724,7 @@ program define undid_stage_three, rclass
             qui count if treat == 0
             local control_obs = r(N)
             if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 & `control_obs' == 1 {
+                if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
                 }
@@ -736,7 +775,7 @@ program define undid_stage_three, rclass
                 }
 
                 if inlist("`weights'", "att", "both") {
-                    qui sum n_t
+                    qui sum n_t if treat > 0 
                     qui scalar `total_n_t' = r(sum)
                     local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
                 }
@@ -762,7 +801,7 @@ program define undid_stage_three, rclass
                 qui count if treat == 0
                 local control_obs = r(N)
                 if !(`treated_obs' > 1 & `control_obs' > 1) {
-                    if `treated_obs' == 1 & `control_obs' == 1 {
+                    if `treated_obs' == 1 | `control_obs' == 1 {
                         local sub_agg_att_jknife "."
                         local sub_agg_att_jknife_pval "."
                     }
@@ -812,7 +851,7 @@ program define undid_stage_three, rclass
             }
 
             if inlist("`weights'", "att", "both") {
-                qui sum n_t
+                qui sum n_t if treat > 0
                 qui scalar `total_n_t' = r(sum)
                 local sub_agg_weights "`sub_agg_weights' `=scalar(`total_n_t')'"
             }
@@ -824,8 +863,11 @@ program define undid_stage_three, rclass
             local treated_obs = r(N)
             qui count if treat == 0
             local control_obs = r(N)
+
+            qui sum gvar_date, meanonly
+            local min_gvar = r(min)
             
-            qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(robust)
+            qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(robust)
             local sub_agg_att = _b[treat]
             if `treated_obs' + `control_obs' > 2 {
                 local sub_agg_att_se = _se[treat]
@@ -843,12 +885,12 @@ program define undid_stage_three, rclass
             }
 
             if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 & `control_obs' == 1 {
+                if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
                 }
                 else {
-                    qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                    qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
                     local sub_agg_att_jknife = _se[treat] 
                     qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 2
                     if `sub_agg_dof' > 0 {
@@ -861,7 +903,7 @@ program define undid_stage_three, rclass
                 }
             }
             else {
-                qui reg y const treat i.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
                 qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 1
@@ -954,10 +996,18 @@ program define undid_stage_three, rclass
         qui scalar `agg_att_dof' = e(df_r)
         qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
         qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
-        qui reg ATT const, noconstant vce(jackknife)
-        qui scalar `agg_att_jknife_se' = _se[const]
-        qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
-        qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+        if `nrows' > 2 {
+            qui reg ATT const, noconstant vce(jackknife)
+            qui scalar `agg_att_jknife_se' = _se[const]
+            qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+            qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+        }
+        else {
+            qui scalar `agg_att_jknife_se' = .
+            qui scalar `agg_att_jknife_pval' = .
+        }
+        
+        
 
         // Store the matrix in r()
         return matrix undid = `table_matrix'
