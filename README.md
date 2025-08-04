@@ -5,13 +5,10 @@ A framework for estimating difference-in-differences with unpoolable data, based
 
 ## Warning: Package Under Development
 
-Please note that this package is under active development and a number of features are not yet implemented:
-- handling of various edge cases
-- `agg` option `"time"` in stage 3
+Please note that this package is under active development and a few features are not yet implemented:
 - plotting capabilites
 - randomization inference
-- handling common adoption scenario
-- updated sthlp files
+- updated sthlp files and documentation
 
 ## Installation
 ```stata

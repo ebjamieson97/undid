@@ -43,13 +43,13 @@ if _rc {
 
 
 use "test_dta_files\merit.dta", clear
-local states 46 58 71 73
+local states 71 58 64 59 85 57 72 61 34 88 11
 foreach s of local states {
 	use "test_dta_files\merit.dta", clear
 	keep if state == `s'
 
 	tostring year, replace
-	undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_common.csv") silo_name(`s') time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") anonymize_weights(0)
+	undid_stage_two, empty_diff_filepath("test_csv_files\stage_three\staggered\missing_vals\only11control\empty_diff_df.csv") silo_name(`s') time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") anonymize_weights(0)
 
 
 }

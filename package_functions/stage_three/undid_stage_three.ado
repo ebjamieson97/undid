@@ -131,7 +131,7 @@ program define undid_stage_three, rclass
         qui replace `var' = "" if `var' == "NA" | `var' == "missing"
         qui destring `var', replace
     }
-    foreach var in diff_estimate diff_estimate_covariates {
+    foreach var in diff_estimate diff_var {
         qui replace `var' = "" if `var' == "NA" | `var' == "missing"
         qui destring `var', replace
         qui gen double `var'_tmp = `var'
@@ -162,10 +162,14 @@ program define undid_stage_three, rclass
             di as err "Error: All values of diff_estimate_covariates are missing, try setting covariates(0)."
             exit 10
         }
+        qui gen double yvar =  diff_var_covariates
+        qui format yvar %20.15g
     }
     else {
         qui gen double y = diff_estimate
         qui format y %20.15g
+        qui gen double yvar = diff_var
+        qui format yvar %20.15g
     }
 
     // Drop rows where y is missing 
@@ -473,6 +477,12 @@ program define undid_stage_three, rclass
     qui tempname sub_agg_dof
     qui tempname sub_agg_tstat
 
+    // For edge cases
+    qui tempname trt0_var
+    qui tempname trt0_weight
+    qui tempname trt1_var
+    qui tempname trt1_weight
+
     // Define some locals to store the sub-aggregate level results
     local sub_agg_label ""
     local sub_agg_atts ""
@@ -502,7 +512,7 @@ program define undid_stage_three, rclass
         local treated_obs = r(N)
         qui count if treat == 0 
         local control_obs = r(N)
-        if `treated_obs' + `control_obs' == 2 { //Only two obs - can't compute standard errors for staggered?
+        if `treated_obs' + `control_obs' == 2 { //Only two obs - can't compute standard errors for staggered
             if `check_staggered' == 1 {
                 qui scalar `agg_att_se' = .
                 qui scalar `agg_att_pval' = .
@@ -511,6 +521,25 @@ program define undid_stage_three, rclass
             }
             else if `check_common' == 1 {
                 // Can manually compute standard error here, but not pval
+                qui summ yvar if treat == 0, meanonly
+                qui scalar `trt0_var' = r(min)
+                qui summ yvar if treat > 0, meanonly
+                qui scalar `trt1_var' = r(min)
+                if "`weights'" == "diff" {
+                    qui sum n if treat >= 0 
+                    qui scalar `total_n' = r(sum)
+                    qui sum n if treat == 0 
+                    qui scalar `trt0_weight' = (r(min) / `total_n')^2
+                    qui sum n if treat > 0 
+                    qui scalar `trt1_weight' = (r(min) / `total_n')^2
+                    qui scalar `agg_att_se' = sqrt((`trt1_var' * `trt1_weight' + `trt0_var' * `trt0_weight')/(`trt0_weight' + `trt1_weight'))
+                } 
+                else {
+                    qui scalar `agg_att_se' = sqrt(`trt1_var' + `trt0_var')
+                }
+                qui scalar `agg_att_pval' = .
+                qui scalar `agg_att_jknife_se' = .
+                qui scalar `agg_att_jknife_pval' = .
             }
         }
         else if `treated_obs' == 1 | `control_obs' == 1 { // If only one of treated_obs or control_obs, can't compute jackknife
@@ -535,7 +564,7 @@ program define undid_stage_three, rclass
         qui levelsof gvar, local(gvars)
         foreach g of local gvars {
             preserve 
-            qui keep if gvar == "`g'"
+            qui keep if gvar == "`g'" & treat >= 0
             if inlist("`weights'", "diff", "both") {
                 qui sum n
                 qui scalar `total_n' = r(sum)
@@ -610,7 +639,7 @@ program define undid_stage_three, rclass
         qui levelsof gt, local(gts)
         foreach gt of local gts {
             preserve
-            qui keep if gt == "`gt'"
+            qui keep if gt == "`gt'" & treat >= 0
             if inlist("`weights'", "diff", "both") {
                 qui sum n
                 qui scalar `total_n' = r(sum)
@@ -639,7 +668,30 @@ program define undid_stage_three, rclass
                 local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
             }
             else {
-                local sub_agg_att_se "."
+                qui count if missing(yvar)
+                local nmiss = r(N)
+                if `nmiss' > 0 {
+                    di as error "Warning: Missing values of variance estimate, could not compute the standard error for gt: `gt'"
+                    local sub_agg_att_se "."
+                }
+                else {
+                    qui summ yvar if treat == 0, meanonly
+                    qui scalar `trt0_var' = r(min)
+                    qui summ yvar if treat > 0, meanonly
+                    qui scalar `trt1_var' = r(min)
+                    if inlist("`weights'", "diff", "both") {
+                        qui sum n if treat >= 0 
+                        qui scalar `total_n' = r(sum)
+                        qui sum n if treat == 0 
+                        qui scalar `trt0_weight' = (r(min) / `total_n')^2
+                        qui sum n if treat > 0 
+                        qui scalar `trt1_weight' = (r(min) / `total_n')^2
+                        local sub_agg_att_se = sqrt((`trt1_var' * `trt1_weight' + `trt0_var' * `trt0_weight')/(`trt0_weight' + `trt1_weight'))
+                    } 
+                    else {
+                        local sub_agg_att_se = sqrt(`trt1_var' + `trt0_var')
+                    }
+                }
                 local sub_agg_att_pval "."
             }
             
@@ -792,7 +844,30 @@ program define undid_stage_three, rclass
                     local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
                 }
                 else {
-                    local sub_agg_att_se "."
+                    qui count if missing(yvar)
+                    local nmiss = r(N)
+                    if `nmiss' > 0 {
+                        di as error "Warning: Missing values of variance estimate, could not compute the standard error for gt: `gt'"
+                        local sub_agg_att_se "."
+                    }
+                    else {
+                        qui summ yvar if treat == 0, meanonly
+                        qui scalar `trt0_var' = r(min)
+                        qui summ yvar if treat > 0, meanonly
+                        qui scalar `trt1_var' = r(min)
+                        if inlist("`weights'", "diff", "both") {
+                            qui sum n if treat >= 0 
+                            qui scalar `total_n' = r(sum)
+                            qui sum n if treat == 0 
+                            qui scalar `trt0_weight' = (r(min) / `total_n')^2
+                            qui sum n if treat > 0 
+                            qui scalar `trt1_weight' = (r(min) / `total_n')^2
+                            local sub_agg_att_se = sqrt((`trt1_var' * `trt1_weight' + `trt0_var' * `trt0_weight')/(`trt0_weight' + `trt1_weight'))
+                        } 
+                        else {
+                            local sub_agg_att_se = sqrt(`trt1_var' + `trt0_var')
+                        }
+                    }
                     local sub_agg_att_pval "."
                 }
 
@@ -990,12 +1065,20 @@ program define undid_stage_three, rclass
             qui replace ATT = ATT * sw
             qui replace const = const * sw
         }
-        qui reg ATT const, noconstant vce(robust)
-        qui scalar `agg_att' = _b[const]
-        qui scalar `agg_att_se' = _se[const]
-        qui scalar `agg_att_dof' = e(df_r)
-        qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
-        qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+        if `nrows'  > 1 {
+            qui reg ATT const, noconstant vce(robust)
+            qui scalar `agg_att' = _b[const]
+            qui scalar `agg_att_se' = _se[const]
+            qui scalar `agg_att_dof' = e(df_r)
+            qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+            qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+        }
+        else {
+            qui scalar `agg_att' = ATT
+            qui scalar `agg_att_se' = .
+            qui scalar `agg_att_pval' = .
+        }
+
         if `nrows' > 2 {
             qui reg ATT const, noconstant vce(jackknife)
             qui scalar `agg_att_jknife_se' = _se[const]

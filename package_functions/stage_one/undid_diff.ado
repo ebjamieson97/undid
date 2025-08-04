@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_diff*/
 /*written by Eric Jamieson */
-/*version 0.1.0 2025-06-13 */
+/*version 1.0.0 2025-08-04 */
 /*------------------------------------*/
 cap program drop undid_diff
 program define undid_diff
@@ -476,4 +476,4 @@ end
 /*--------------------------------------*/
 /* Change Log */
 /*--------------------------------------*/
-*0.1.0 - created function
+*1.0.0 - created function

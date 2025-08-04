@@ -1,0 +1,12 @@
+silo_name,start_time,end_time,treatment_time,covariates
+71,1989,2000,1991,asian;black;male
+58,1989,2000,1993,asian;black;male
+64,1989,2000,1996,asian;black;male
+59,1989,2000,1997,asian;black;male
+85,1989,2000,1997,asian;black;male
+57,1989,2000,1998,asian;black;male
+72,1989,2000,1998,asian;black;male
+61,1989,2000,1999,asian;black;male
+34,1989,2000,2000,asian;black;male
+88,1989,2000,2000,asian;black;male
+11,1989,2000,control,asian;black;male
