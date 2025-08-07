@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_three*/
 /*written by Eric Jamieson */
-/*version 0.0.1 2025-08-03 */
+/*version 0.0.1 2025-08-07 */
 /*------------------------------------*/
 cap program drop undid_stage_three
 program define undid_stage_three, rclass
@@ -507,6 +507,7 @@ program define undid_stage_three, rclass
         }
         qui reg y const treat if treat >= 0, noconstant vce(robust)
         qui scalar `agg_att' = _b[treat]
+        qui scalar `agg_att_se' = _se[treat]
         qui scalar `agg_att_dof' = e(df_r)
         qui count if treat > 0
         local treated_obs = r(N)
@@ -543,18 +544,16 @@ program define undid_stage_three, rclass
             }
         }
         else if `treated_obs' == 1 | `control_obs' == 1 { // If only one of treated_obs or control_obs, can't compute jackknife
-                qui scalar `agg_att_se' = _se[treat]
                 qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
                 qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
                 qui scalar `agg_att_jknife_se' = .
                 qui scalar `agg_att_jknife_pval' = .
         }
         else {
-            qui scalar `agg_att_se' = _se[treat]
             qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
             qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
             qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-            qui scalar `agg_att_dof' = `agg_att_dof' + 1
+            qui scalar `agg_att_dof' = e(N) - 1
             qui scalar `agg_att_jknife_se' = _se[treat]
             qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
             qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
@@ -601,28 +600,15 @@ program define undid_stage_three, rclass
             local treated_obs = r(N)
             qui count if treat == 0
             local control_obs = r(N)
-            if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 | `control_obs' == 1 {
-                    local sub_agg_att_jknife "."
-                    local sub_agg_att_jknife_pval "."
-                }
-                else {
-                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-                    local sub_agg_att_jknife = _se[treat] 
-                    if `sub_agg_dof' > 0 {
-                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-                    }
-                    else {
-                        local sub_agg_att_jknife_pval "."
-                    }
-                }
+            if `treated_obs' == 1 | `control_obs' == 1 {
+                local sub_agg_att_jknife "."
+                local sub_agg_att_jknife_pval "."
             }
             else {
                 qui reg y const treat if treat >= 0, noconstant vce(jackknife)
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                qui scalar `sub_agg_dof' = e(N) - 1
                 local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
             }      
 
@@ -699,28 +685,15 @@ program define undid_stage_three, rclass
             local treated_obs = r(N)
             qui count if treat == 0
             local control_obs = r(N)
-            if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 | `control_obs' == 1 {
+            if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
-                }
-                else {
-                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-                    local sub_agg_att_jknife = _se[treat] 
-                    if `sub_agg_dof' > 0 {
-                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-                    }
-                    else {
-                        local sub_agg_att_jknife_pval "."
-                    }
-                }
             }
             else {
                 qui reg y const treat if treat >= 0, noconstant vce(jackknife)
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                qui scalar `sub_agg_dof' = e(N) - 1
                 local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
             }            
 
@@ -775,30 +748,17 @@ program define undid_stage_three, rclass
             local treated_obs = r(N)
             qui count if treat == 0
             local control_obs = r(N)
-            if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 | `control_obs' == 1 {
+            if `treated_obs' == 1 | `control_obs' == 1 {
                     local sub_agg_att_jknife "."
                     local sub_agg_att_jknife_pval "."
-                }
-                else {
-                    qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-                    local sub_agg_att_jknife = _se[treat] 
-                    if `sub_agg_dof' > 0 {
-                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-                    }
-                    else {
-                        local sub_agg_att_jknife_pval "."
-                    }
-                }
             }
             else {
                 qui reg y const treat if treat >= 0, noconstant vce(jackknife)
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                qui scalar `sub_agg_dof' = e(N) - 1
                 local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-            }            
+            }          
 
             local sub_agg_label "`sub_agg_label' `s'"
             local sub_agg_atts "`sub_agg_atts' `sub_agg_att'"
@@ -875,28 +835,15 @@ program define undid_stage_three, rclass
                 local treated_obs = r(N)
                 qui count if treat == 0
                 local control_obs = r(N)
-                if !(`treated_obs' > 1 & `control_obs' > 1) {
-                    if `treated_obs' == 1 | `control_obs' == 1 {
-                        local sub_agg_att_jknife "."
-                        local sub_agg_att_jknife_pval "."
-                    }
-                    else {
-                        qui reg y const treat if treat >= 0, noconstant vce(jackknife)
-                        local sub_agg_att_jknife = _se[treat] 
-                        if `sub_agg_dof' > 0 {
-                            qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                            local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-                        }
-                        else {
-                            local sub_agg_att_jknife_pval "."
-                        }
-                    }
+                if `treated_obs' == 1 | `control_obs' == 1 {
+                    local sub_agg_att_jknife "."
+                    local sub_agg_att_jknife_pval "."
                 }
                 else {
                     qui reg y const treat if treat >= 0, noconstant vce(jackknife)
                     local sub_agg_att_jknife = _se[treat]
                     qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                    qui scalar `sub_agg_dof' = `sub_agg_dof' + 1
+                    qui scalar `sub_agg_dof' = e(N) - 1
                     local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
                 }            
 
@@ -944,45 +891,27 @@ program define undid_stage_three, rclass
             
             qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(robust)
             local sub_agg_att = _b[treat]
-            if `treated_obs' + `control_obs' > 2 {
-                local sub_agg_att_se = _se[treat]
-            }
-            else {
-                local sub_agg_att_se = "."
-            }
             qui scalar `sub_agg_dof' = e(df_r)
             if `sub_agg_dof' > 0 {
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
+                local sub_agg_att_se = _se[treat]
                 local sub_agg_att_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
             }
             else {
+                local sub_agg_att_se "."
                 local sub_agg_att_pval "."
             }
 
-            if !(`treated_obs' > 1 & `control_obs' > 1) {
-                if `treated_obs' == 1 | `control_obs' == 1 {
-                    local sub_agg_att_jknife "."
-                    local sub_agg_att_jknife_pval "."
-                }
-                else {
-                    qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
-                    local sub_agg_att_jknife = _se[treat] 
-                    qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 2
-                    if `sub_agg_dof' > 0 {
-                        qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                        local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
-                    }
-                    else {
-                        local sub_agg_att_jknife_pval "."
-                    }
-                }
+            if `treated_obs' == 1 | `control_obs' == 1 {
+                local sub_agg_att_jknife "."
+                local sub_agg_att_jknife_pval "."
             }
             else {
                 qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
-                qui scalar `sub_agg_dof' = `treated_obs' + `control_obs' - 1
-                local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
+                qui scalar `sub_agg_dof' = e(N) - 1
+                    local sub_agg_att_jknife_pval = 2 * ttail(`sub_agg_dof', abs(`sub_agg_tstat'))
             }            
 
             local sub_agg_label "`sub_agg_label' `t'"
