@@ -496,6 +496,8 @@ program define undid_stage_three, rclass
     if "`agg'" == "none" {
         // Still need to add functionality with common adoption (and its edge case)
         // Basically, should manually calculate the edge case for common adoption
+        preserve
+        qui keep if treat >= 0
         if "`weights'" == "diff" {
             qui sum n 
             qui scalar `total_n' = r(sum)
@@ -522,21 +524,29 @@ program define undid_stage_three, rclass
             }
             else if `check_common' == 1 {
                 // Can manually compute standard error here, but not pval
-                qui summ yvar if treat == 0, meanonly
-                qui scalar `trt0_var' = r(min)
-                qui summ yvar if treat > 0, meanonly
-                qui scalar `trt1_var' = r(min)
-                if "`weights'" == "diff" {
-                    qui sum n if treat >= 0 
-                    qui scalar `total_n' = r(sum)
-                    qui sum n if treat == 0 
-                    qui scalar `trt0_weight' = (r(min) / `total_n')^2
-                    qui sum n if treat > 0 
-                    qui scalar `trt1_weight' = (r(min) / `total_n')^2
-                    qui scalar `agg_att_se' = sqrt((`trt1_var' * `trt1_weight' + `trt0_var' * `trt0_weight')/(`trt0_weight' + `trt1_weight'))
-                } 
+                qui count if missing(yvar)
+                local nmiss = r(N)
+                if `nmiss' > 0 {
+                    di as error "Warning: Missing values of variance estimate, could not compute the standard error!"
+                    local sub_agg_att_se "."
+                }
                 else {
-                    qui scalar `agg_att_se' = sqrt(`trt1_var' + `trt0_var')
+                    qui summ yvar if treat == 0, meanonly
+                    qui scalar `trt0_var' = r(min)
+                    qui summ yvar if treat > 0, meanonly
+                    qui scalar `trt1_var' = r(min)
+                    if "`weights'" == "diff" {
+                        qui sum n if treat >= 0 
+                        qui scalar `total_n' = r(sum)
+                        qui sum n if treat == 0 
+                        qui scalar `trt0_weight' = (r(min) / `total_n')^2
+                        qui sum n if treat > 0 
+                        qui scalar `trt1_weight' = (r(min) / `total_n')^2
+                        qui scalar `agg_att_se' = sqrt((`trt1_var' * `trt1_weight' + `trt0_var' * `trt0_weight')/(`trt0_weight' + `trt1_weight'))
+                    } 
+                    else {
+                        qui scalar `agg_att_se' = sqrt(`trt1_var' + `trt0_var')
+                    }
                 }
                 qui scalar `agg_att_pval' = .
                 qui scalar `agg_att_jknife_se' = .
@@ -558,6 +568,7 @@ program define undid_stage_three, rclass
             qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
             qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
         }
+        restore
     } 
     else if "`agg'" == "g" {
         qui levelsof gvar, local(gvars)
@@ -994,6 +1005,8 @@ program define undid_stage_three, rclass
             qui replace ATT = ATT * sw
             qui replace const = const * sw
         }
+
+        // Compute aggregate ATT and robust SE
         if `nrows'  > 1 {
             qui reg ATT const, noconstant vce(robust)
             qui scalar `agg_att' = _b[const]
@@ -1008,9 +1021,15 @@ program define undid_stage_three, rclass
             qui scalar `agg_att_pval' = .
         }
 
+        // Compute jackknife SE
         if `nrows' > 2 {
             qui reg ATT const, noconstant vce(jackknife)
             qui scalar `agg_att_jknife_se' = _se[const]
+            qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+            qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+        }
+        else if `nrows' == 2 { // Manually compute since vce(jackknife) fails for n = 2
+            qui scalar `agg_att_jknife_se' = sqrt( ((2-1)/2) * ((ATT[1] - `agg_att')^2 + (ATT[2] - `agg_att')^2))
             qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
             qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
         }
