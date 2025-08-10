@@ -6,7 +6,7 @@ version 16
 /*-----------TEST TEST TEST-----------*/
 /*----------undid_stage_three-----------*/
 /*-----------TEST TEST TEST-----------*/
-/*-------version 1.0.0 2025-05-04-----*/
+/*-------version 1.0.0 2025-08-10-----*/
 /*------------------------------------*/
 
 
@@ -40,9 +40,9 @@ if _rc {
 * ---------------------------------------------- *
 // show trace for up to, say, 1 levels of calls
 
-set trace on
-set tracedepth 1
 set trace off
-undid_stage_three, dir_path("test_csv_files\stage_three\common") agg("silo") weights("both")
+set tracedepth 1
+
+undid_stage_three, dir_path("test_csv_files\stage_three\common") agg("none") weights("none")
 
  

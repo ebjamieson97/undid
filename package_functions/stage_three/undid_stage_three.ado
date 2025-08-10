@@ -939,6 +939,58 @@ program define undid_stage_three, rclass
     // ---------------------------- PART FOUR: Randomization Inference ------------------------ // 
     // ---------------------------------------------------------------------------------------- //
 
+    // Part 4a : Compute n_unique_assignments
+
+    // If common treatment scenario and gvar doesnt exist, create it 
+    if `check_common' == 1 & "`agg'" != "silo" {
+        qui rename common_treatment_time gvar
+        qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date)
+    }
+
+    // Compute numerator
+    qui levelsof silo_name, local(unique_silos)
+    local n_silos: word count `unique_silos'
+    local ln_num = lnfactorial(`n_silos')
+
+    // Grab all of the gvar assignments and treated silos and compute denominator
+    preserve 
+        qui keep if treat == 1
+        qui bysort silo_name: egen min_gvar= min(gvar_date)
+        qui keep if gvar_date == min_gvar
+        qui drop min_gvar
+        qui contract gvar silo_name
+
+        local gvar_assignments ""
+        qui count
+         forvalues i = 1/`r(N)' {
+            local current_gvar = gvar[`i']
+            local gvar_assignments "`gvar_assignments' `current_gvar'"
+        }
+    
+        // Compute first part of the denominator
+        local n_gvar_assignments: word count `gvar_assignments'
+        local ln_den = lnfactorial(`n_silos' - `n_gvar_assignments')
+    
+        // Compute frequencies of unique gvar values and their factorial contributions
+        qui levelsof gvar, local(unique_gvars)
+        foreach m in `unique_gvars' {
+            qui count if gvar == "`m'"
+            local n_m = r(N)
+            local ln_den = `ln_den' + lnfactorial(`n_m')
+        }
+        restore
+    
+    // Compute the final result and return scalar
+    // Note that this calculation may end up being different from Julia's due to floating point precision... 
+    // e.g. for 51 states (10 treated), Julia gives 5795970104231798 while Stata gives 5795970104232000 (difference of less than 0.000000001%)
+    qui tempname n_unique_assignments_scalar
+    local n_unique_assignments_local = exp(`ln_num' - `ln_den')
+    qui scalar `n_unique_assignments_scalar' = floor(`n_unique_assignments_local')
+
+    // Part 4b : Randomize treatment assignments
+
+    // Should probably do in a while loop with some counter for trying to find random assignments (try 1000 times until breaking?) 
+
 
     // ---------------------------------------------------------------------------------------- //
     // -------- PART FIVE: Return and Display Results, and Compute Aggregate Values ----------- // 
