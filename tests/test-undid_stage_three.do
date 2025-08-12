@@ -40,9 +40,8 @@ if _rc {
 * ---------------------------------------------- *
 // show trace for up to, say, 1 levels of calls
 
+clear
 set trace off
 set tracedepth 1
 
-undid_stage_three, dir_path("test_csv_files\stage_three\common") agg("none") weights("none")
-
- 
+undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("none") weights("none") max_attempts(20) use_pre_controls(1)

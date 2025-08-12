@@ -8,7 +8,7 @@ program define undid_stage_three, rclass
     version 16
     syntax, dir_path(string) /// 
             [agg(string) weights(string) covariates(int 0) use_pre_controls(int 0) ///
-            nperm(int 1001) verbose(int 1) seed(int 0)]
+            nperm(int 1001) verbose(int 1) seed(int 0) max_attempts(int 100)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -40,6 +40,11 @@ program define undid_stage_three, rclass
     // Process seed
     if "`seed'" != "0" {
         set seed `seed'
+    }
+    // Check max_attempts
+    if `max_attempts' < 1 {
+        di as error "Error: 'max_attempts' must be > 0!"
+        exit 16
     }
 
     // Check string inputs
@@ -980,14 +985,85 @@ program define undid_stage_three, rclass
         }
         restore
     
-    // Compute the final result and return scalar
+    // Compute the final permutation result and return scalar
     // Note that this calculation may end up being different from Julia's due to floating point precision... 
     // e.g. for 51 states (10 treated), Julia gives 5795970104231798 while Stata gives 5795970104232000 (difference of less than 0.000000001%)
-    qui tempname n_unique_assignments_scalar
-    local n_unique_assignments_local = exp(`ln_num' - `ln_den')
-    qui scalar `n_unique_assignments_scalar' = floor(`n_unique_assignments_local')
+    local n_unique_assignments = floor(exp(`ln_num' - `ln_den'))
+    if `nperm' > `n_unique_assignments' {
+        di as error "'nperm' = `nperm' is greater than the number of unique permutations (`n_unique_assignments'). Setting 'nperm' to `n_unique_assignments'."
+        local nperm = `n_unique_assignments'
+    }
 
-    // Part 4b : Randomize treatment assignments
+//     // Part 4b : Randomize treatment assignments
+//     qui encode silo_name, gen(silo_id)
+//     preserve
+//     qui keep silo_id silo_name
+//     qui duplicates drop
+//     qui tempfile silo_mapping
+//     qui save `silo_mapping'
+//     restore
+//     if `check_staggered' == 1 {
+//         qui sort silo_id gvar_date t
+//     }
+//     else if `check_common' == 1 {
+//         qui sort silo_id gvar_date
+//     }
+//     // Call the Mata function and capture the results
+//     // After your randomization call:
+//     mata: all_data = undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common')
+// 
+// // Switch to default frame  
+// frame change default
+// 
+// // Transfer to Stata
+// mata: st_matrix("ALL_DATA", all_data)
+// svmat ALL_DATA
+// 
+// // Rename the columns appropriately
+// if `check_common' == 1 {
+//     rename ALL_DATA1 silo_id
+// rename ALL_DATA2 gvar_date  
+// rename ALL_DATA3 treat
+// }
+// else if `check_staggered' == 1 {
+//     rename ALL_DATA1 silo_id
+// rename ALL_DATA2 gvar_date  
+// rename ALL_DATA3 t
+// rename ALL_DATA4 treat
+// }
+// 
+// 
+// merge m:1 silo_id using `silo_mapping', keep(match) nogen
+// 
+// qui _parse_date_to_string, varname(gvar_date) date_format("yyyy") newvar(gvar)
+// if `check_staggered' == 1 {
+//     qui _parse_date_to_string, varname(t) date_format("yyyy") newvar(time)
+// }
+// 
+// if `check_common' == 1 {
+//     qui drop gvar_date silo_id
+//     qui order silo_name gvar
+// }
+// else if `check_staggered' == 1 {
+//     qui drop gvar_date t silo_id
+//     qui order silo_name gvar time
+// }
+// 
+// 
+// display "Actually created `actual_perms' permutations out of `nperm' requested"
+// if `check_staggered' == 1 {
+// forvalues i = 5/`=5+`actual_perms'-1' {
+//     local j = `i' - 4
+//     rename ALL_DATA`i' treat_rand`j'
+// }
+// }
+// else if `check_common' == 1 {
+//     forvalues i = 4/`=4+`actual_perms'-1' {
+//     local j = `i' - 3
+//     rename ALL_DATA`i' treat_rand`j'
+// }
+// }
+// 
 
     // Should probably do in a while loop with some counter for trying to find random assignments (try 1000 times until breaking?) 
 
@@ -1124,6 +1200,168 @@ program define undid_stage_three, rclass
 
 
 end
+
+// Mata functions for randomization inference:
+qui cap mata: mata which undid_randomize_treatment()
+if _rc {
+mata:
+real matrix undid_randomize_treatment(
+    real scalar nperm,
+    real scalar seed,
+    real scalar use_pre_controls,
+    real scalar max_attempts,
+    real scalar common_flag
+)
+{
+    real matrix M, original_treated, all_states, treatment_times, results, combined_results, common_staggered
+    real scalar i, k, nrows, j, row_idx, state, trt_time, t, n_all_states, n_treat_times, attempts
+    real vector shuffled_indices, new_treated_states, new_treated_times, new_treat, treat_indices
+    string scalar key
+    string vector seen, pairs_str, sorted_pairs
+    real matrix assigned_tt
+    real scalar found_match, assigned_time
+
+    // Get data from Stata
+    if (common_flag == 1) {
+        M = st_data(., ("silo_id", "gvar_date", "treat"))
+        nrows = rows(M)
+        treat_col = 3
+    } 
+    else {
+        M = st_data(., ("silo_id", "gvar_date", "t", "treat"))
+        nrows = rows(M)
+        treat_col = 4
+    }    
+    
+    // Initialize results matrix: nrows x nperm
+    results = J(nrows, nperm-1, .)
+    
+    // Extract unique treated units (where treat == 1)
+    original_treated = select(M, M[.,treat_col] :== 1)
+    if (rows(original_treated) == 0) {
+        _error("No treated units found")
+        return(M)  // Return at least the original data
+    }
+    original_treated = uniqrows(original_treated[.,(1,2)])
+    original_treated_times = original_treated[., 2]
+    k = rows(original_treated)
+
+    // Get all unique states and treatment times
+    all_states = uniqrows(M[.,1])
+    treatment_times = uniqrows(original_treated[.,2])
+    n_all_states = rows(all_states)
+
+    // Set random seed
+    if (seed != 0) {
+        rseed(seed)
+    }
+    
+    // Initialize tracking
+    i = 1
+    seen = J(0, 1, "")
+    
+    // Create key for original treatment assignment
+    pairs_str = J(k, 1, "")
+    for (j = 1; j <= k; j++) {
+        pairs_str[j] = strofreal(original_treated[j,1]) + "-" + strofreal(original_treated[j,2])
+    }
+    sorted_pairs = sort(pairs_str, 1)
+    key = invtokens(sorted_pairs', "")
+    seen = seen \ key
+    attempts = 0
+
+    // Main randomization loop
+    while (i < nperm & attempts < max_attempts) {
+        attempts++
+
+        // Shuffle states and select k of them
+        shuffled_indices = jumble(1::n_all_states)
+        new_treated_states = all_states[shuffled_indices[1::k]]
+        
+        // Randomly permute treatment times
+        treat_indices = jumble(1::k)
+        new_treated_times = original_treated_times[treat_indices]  
+        
+        // Create key for this permutation
+        pairs_str = J(k, 1, "")
+        for (j = 1; j <= k; j++) {
+            pairs_str[j] = strofreal(new_treated_states[j]) + "-" + strofreal(new_treated_times[j])
+        }
+        sorted_pairs = sort(pairs_str, 1)
+        key = invtokens(sorted_pairs', "")
+        
+        // Check if we've seen this combination before
+        if (rows(seen) > 0 && anyof(seen, key)) {
+            continue
+        } 
+        
+        // Add to seen combinations
+        seen = seen \ key
+        
+        // Create assignment matrix
+        assigned_tt = new_treated_states, new_treated_times
+        
+        // Generate new treatment vector
+        new_treat = J(nrows, 1, .)
+        
+        for (row_idx = 1; row_idx <= nrows; row_idx++) {
+            state = M[row_idx, 1]
+            trt_time = M[row_idx, 2]
+            
+            // Check if this state is in assigned_tt
+            found_match = 0
+            assigned_time = .
+            for (j = 1; j <= rows(assigned_tt); j++) {
+                if (assigned_tt[j,1] == state) {
+                    found_match = 1
+                    assigned_time = assigned_tt[j,2]
+                    break
+                }
+            }
+            
+            if (found_match) {
+                if (trt_time == assigned_time) {
+                    new_treat[row_idx] = 1
+                } else {
+                    if (use_pre_controls) {
+                        t = M[row_idx, 3]
+                        if (t < assigned_time) {
+                            new_treat[row_idx] = 0
+                        } else {
+                            new_treat[row_idx] = -1
+                        }
+                    } else {
+                        new_treat[row_idx] = -1
+                    }
+                }
+            } else {
+                new_treat[row_idx] = 0
+            }
+        }
+        
+        // Store this permutation in results matrix
+        results[., i] = new_treat
+        i++
+        attempts=0
+    }
+
+    real scalar actual_perms
+    actual_perms = i - 1
+    
+    // Store the actual number of permutations in a Stata local
+    st_local("actual_perms", strofreal(actual_perms))
+    // Combine original data with randomized results
+    // M has 4 columns: silo_id, gvar_date, t, treat
+    // results has nperm columns of randomized treatments
+    combined_results = M, results[., 1::actual_perms]
+    
+    return(combined_results)
+}
+end
+}
+    
+    
+
 
 /*--------------------------------------*/
 /* Change Log */
