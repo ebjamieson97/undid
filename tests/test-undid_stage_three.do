@@ -34,14 +34,14 @@ if _rc {
 
 
 * ---------------------------------------------- *
-* Step 3: Load in silo data and try variations of undid_stage_two
+* Step 3: Load in silo data and try variations of undid_stage_three
 * make sure proper error messages display
-* ensure outputted csv files are correct
+* ensure outputs are correct
 * ---------------------------------------------- *
 // show trace for up to, say, 1 levels of calls
 
 clear
-set trace off
-set tracedepth 1
+set trace on
+set tracedepth 3
 
-undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("none") weights("none") max_attempts(20) use_pre_controls(1)
+undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("g") weights("both") max_attempts(20) use_pre_controls(0) covariates(0) verbose(250) seed(1234)

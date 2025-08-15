@@ -8,7 +8,7 @@ program define undid_stage_three, rclass
     version 16
     syntax, dir_path(string) /// 
             [agg(string) weights(string) covariates(int 0) use_pre_controls(int 0) ///
-            nperm(int 1001) verbose(int 1) seed(int 0) max_attempts(int 100)]
+            nperm(int 1001) verbose(int 0) seed(int 0) max_attempts(int 100)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -21,8 +21,8 @@ program define undid_stage_three, rclass
         exit 3
     }
     // Check verbose
-    if !inlist(`verbose', 0, 1) {
-        di as error "Error: verbose must be set to 0 (false) or to 1 (true)."
+    if `verbose' < 0 {
+        di as error "Error: verbose must be set to 0 (off) or a positive integer denoting how often to print progress messages for randomization inference."
         exit 4
     }
     // Check use_pre_controls
@@ -162,7 +162,7 @@ program define undid_stage_three, rclass
         qui gen double y = diff_estimate_covariates
         qui format y %20.15g
         // Check if all values of y are missing
-        count if !missing(y)
+        qui count if !missing(y)
         if r(N) == 0 {
             di as err "Error: All values of diff_estimate_covariates are missing, try setting covariates(0)."
             exit 10
@@ -456,8 +456,28 @@ program define undid_stage_three, rclass
         }
     }
 
-    // After all the pre-processing checks are done, can finally move on to regressions
+    // If common treatment scenario and gvar doesnt exist, create it 
+    if `check_common' == 1 & "`agg'" != "silo" {
+        qui rename common_treatment_time gvar
+        qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date)
+    }
+    
+    // Organize data
+    qui encode silo_name, gen(silo_id)
+    //preserve
+    //qui keep silo_id silo_name
+    //qui duplicates drop
+    //qui tempfile silo_mapping
+    //qui save `silo_mapping'
+    //restore
+    if `check_staggered' == 1 {
+        qui sort gvar_date t silo_id
+    }
+    else if `check_common' == 1 {
+        qui sort gvar_date silo_id
+    }
 
+    // After all the pre-processing checks are done, can finally move on to regressions
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART THREE: Compute Results ------------------------------- // 
@@ -941,16 +961,104 @@ program define undid_stage_three, rclass
     }
 
     // ---------------------------------------------------------------------------------------- //
-    // ---------------------------- PART FOUR: Randomization Inference ------------------------ // 
+    // ------------------------- PART FOUR: Compute Aggregate Values -------------------------- // 
     // ---------------------------------------------------------------------------------------- //
 
-    // Part 4a : Compute n_unique_assignments
+    if "`agg'" != "none" {
 
-    // If common treatment scenario and gvar doesnt exist, create it 
-    if `check_common' == 1 & "`agg'" != "silo" {
-        qui rename common_treatment_time gvar
-        qui _parse_string_to_date, varname(gvar) date_format("`date_format'") newvar(gvar_date)
+        // Initialize a temporary matrix to store the numeric results
+        tempname weight_total
+        qui scalar `weight_total' = 0
+        tempname table_matrix
+        local nrows : word count `sub_agg_label'  
+        local num_cols = 7
+        qui matrix `table_matrix' = J(`nrows', `num_cols', .)
+
+        forvalues i = 1/`nrows' {
+            local lbl     : word `i' of `sub_agg_label'
+            local att     : word `i' of `sub_agg_atts'
+            local se      : word `i' of `sub_agg_atts_se'
+            local pval    : word `i' of `sub_agg_atts_pval'
+            local jse     : word `i' of `sub_agg_atts_jknife'
+            local jpval   : word `i' of `sub_agg_atts_jknife_pval'
+            local sub_agg_weight : word `i' of `sub_agg_weights'
+
+            // Fill the matrix with numeric values, note that randomization inference p-val can't be assigned yet
+            matrix `table_matrix'[`i', 1] = real("`att'")
+            matrix `table_matrix'[`i', 2] = real("`se'")
+            matrix `table_matrix'[`i', 3] = real("`pval'")
+            matrix `table_matrix'[`i', 4] = real("`jse'")
+            matrix `table_matrix'[`i', 5] = real("`jpval'")
+            matrix `table_matrix'[`i', 7]  = .
+            
+            qui scalar `weight_total' = `weight_total' + `sub_agg_weight'
+
+        }
+
+        if inlist("`weights'", "att", "both") {
+            forvalues i = 1/`nrows' {
+                local sub_agg_weight : word `i' of `sub_agg_weights'
+                matrix `table_matrix'[`i', 7] = `sub_agg_weight' / `weight_total'
+            } 
+        }
+
+		// Set column names for the matrix
+        matrix colnames `table_matrix' = ATT SE pval JKNIFE_SE JKNIFE_pval RI_pval W
+        
+        // Set row names for the matrix using the labels
+        matrix rownames `table_matrix' = `sub_agg_label'
+
+        // Compute aggregate results
+        preserve
+            clear
+            qui svmat double `table_matrix', names(col)
+            qui gen byte const = 1
+            if inlist("`weights'", "att", "both") {
+                qui gen double sw = sqrt(W)
+                qui replace ATT = ATT * sw
+                qui replace const = const * sw
+            }
+
+            // Compute aggregate ATT and robust SE
+            if `nrows'  > 1 {
+                qui reg ATT const, noconstant vce(robust)
+                qui scalar `agg_att' = _b[const]
+                qui scalar `agg_att_se' = _se[const]
+                qui scalar `agg_att_dof' = e(df_r)
+                qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
+                qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
+            }
+            else {
+                qui scalar `agg_att' = ATT
+                qui scalar `agg_att_se' = .
+                qui scalar `agg_att_pval' = .
+            }
+
+            // Compute jackknife SE
+            if `nrows' > 2 {
+                qui reg ATT const, noconstant vce(jackknife)
+                qui scalar `agg_att_jknife_se' = _se[const]
+                qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+                qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+            }
+            else if `nrows' == 2 { // Manually compute since vce(jackknife) fails for n = 2
+                qui scalar `agg_att_jknife_se' = sqrt( ((2-1)/2) * ((ATT[1] - `agg_att')^2 + (ATT[2] - `agg_att')^2))
+                qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
+                qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
+            }
+            else {
+                qui scalar `agg_att_jknife_se' = .
+                qui scalar `agg_att_jknife_pval' = .
+            }
+        restore
+        
     }
+
+    // ---------------------------------------------------------------------------------------- //
+    // ------------------------- PART FIVE: Randomization Inference! -------------------------- // 
+    // ---------------------------------------------------------------------------------------- //
+
+    // Part 5a : Compute n_unique_assignments
 
     // Compute numerator
     qui levelsof silo_name, local(unique_silos)
@@ -983,93 +1091,32 @@ program define undid_stage_three, rclass
             local n_m = r(N)
             local ln_den = `ln_den' + lnfactorial(`n_m')
         }
-        restore
+    restore
     
     // Compute the final permutation result and return scalar
     // Note that this calculation may end up being different from Julia's due to floating point precision... 
     // e.g. for 51 states (10 treated), Julia gives 5795970104231798 while Stata gives 5795970104232000 (difference of less than 0.000000001%)
-    local n_unique_assignments = floor(exp(`ln_num' - `ln_den'))
+    local n_unique_assignments = round(exp(`ln_num' - `ln_den'))
     if `nperm' > `n_unique_assignments' {
         di as error "'nperm' = `nperm' is greater than the number of unique permutations (`n_unique_assignments'). Setting 'nperm' to `n_unique_assignments'."
         local nperm = `n_unique_assignments'
     }
 
-//     // Part 4b : Randomize treatment assignments
-//     qui encode silo_name, gen(silo_id)
-//     preserve
-//     qui keep silo_id silo_name
-//     qui duplicates drop
-//     qui tempfile silo_mapping
-//     qui save `silo_mapping'
-//     restore
-//     if `check_staggered' == 1 {
-//         qui sort silo_id gvar_date t
-//     }
-//     else if `check_common' == 1 {
-//         qui sort silo_id gvar_date
-//     }
-//     // Call the Mata function and capture the results
-//     // After your randomization call:
-//     mata: all_data = undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common')
-// 
-// // Switch to default frame  
-// frame change default
-// 
-// // Transfer to Stata
-// mata: st_matrix("ALL_DATA", all_data)
-// svmat ALL_DATA
-// 
-// // Rename the columns appropriately
-// if `check_common' == 1 {
-//     rename ALL_DATA1 silo_id
-// rename ALL_DATA2 gvar_date  
-// rename ALL_DATA3 treat
-// }
-// else if `check_staggered' == 1 {
-//     rename ALL_DATA1 silo_id
-// rename ALL_DATA2 gvar_date  
-// rename ALL_DATA3 t
-// rename ALL_DATA4 treat
-// }
-// 
-// 
-// merge m:1 silo_id using `silo_mapping', keep(match) nogen
-// 
-// qui _parse_date_to_string, varname(gvar_date) date_format("yyyy") newvar(gvar)
-// if `check_staggered' == 1 {
-//     qui _parse_date_to_string, varname(t) date_format("yyyy") newvar(time)
-// }
-// 
-// if `check_common' == 1 {
-//     qui drop gvar_date silo_id
-//     qui order silo_name gvar
-// }
-// else if `check_staggered' == 1 {
-//     qui drop gvar_date t silo_id
-//     qui order silo_name gvar time
-// }
-// 
-// 
-// display "Actually created `actual_perms' permutations out of `nperm' requested"
-// if `check_staggered' == 1 {
-// forvalues i = 5/`=5+`actual_perms'-1' {
-//     local j = `i' - 4
-//     rename ALL_DATA`i' treat_rand`j'
-// }
-// }
-// else if `check_common' == 1 {
-//     forvalues i = 4/`=4+`actual_perms'-1' {
-//     local j = `i' - 3
-//     rename ALL_DATA`i' treat_rand`j'
-// }
-// }
-// 
+     // Part 5b : Do randomization inference
+     qui tempname ri_pval_aggregate
+     qui scalar `ri_pval_aggregate' = .
 
-    // Should probably do in a while loop with some counter for trying to find random assignments (try 1000 times until breaking?) 
-
+     // Call the Mata function and capture the results
+     if "`agg'" == "g" {
+             mata: undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common', "`agg'", "`weights'", `verbose', "`ri_pval_aggregate'", "`agg_att'", "`table_matrix'")
+     }
+     // else {
+     //         mata: undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common', "`agg'", "`weights'", `verbose', "`ri_pval_aggregate'", "`agg_att'")
+     // }
+ 
 
     // ---------------------------------------------------------------------------------------- //
-    // -------- PART FIVE: Return and Display Results, and Compute Aggregate Values ----------- // 
+    // -------------------------- PART SIX: Return and Display Results ------------------------ // 
     // ---------------------------------------------------------------------------------------- //
 
     if "`agg'" != "none" {
@@ -1079,14 +1126,6 @@ program define undid_stage_three, rclass
 		di as text "Sub-Aggregate Group       | " as text "ATT             | SE     | p-val  | JKNIFE SE  | JKNIFE p-val | RI p-val"
 		di as text "--------------------------|-----------------|--------|--------|------------|--------------|---------|"  
 		
-		// Initialize a temporary matrix to store the numeric results
-        tempname weight_total
-        qui scalar `weight_total' = 0
-        tempname table_matrix
-        local nrows : word count `sub_agg_label'  
-        local num_cols = 7
-        qui matrix `table_matrix' = J(`nrows', `num_cols', .)
-		
 		forvalues i = 1/`nrows' {
             local lbl     : word `i' of `sub_agg_label'
             local att     : word `i' of `sub_agg_atts'
@@ -1095,78 +1134,12 @@ program define undid_stage_three, rclass
             local jse     : word `i' of `sub_agg_atts_jknife'
             local jpval   : word `i' of `sub_agg_atts_jknife_pval'
             local sub_agg_weight : word `i' of `sub_agg_weights'
-			di as text %-25s "`lbl'" as text " |" as result %-16.7f real("`att'") as text " | " as result  %-7.3f real("`se'") as text "| " as result %-7.3f real("`pval'") as text "| " as result  %-11.3f real("`jse'") as text "| " as result %-13.3f real("`jpval'") as text "|" as result %-9.3f "." as text "|"
+            local ri_pval = el(`table_matrix',`i',6)
+			di as text %-25s "`lbl'" as text " |" as result %-16.7f real("`att'") as text " | " as result  %-7.3f real("`se'") as text "| " as result %-7.3f real("`pval'") as text "| " as result  %-11.3f real("`jse'") as text "| " as result %-13.3f real("`jpval'") as text "|" as result %-9.3f `ri_pval' as text "|"
     
 			di as text "--------------------------|-----------------|--------|--------|------------|--------------|---------|"
             
-            // Fill the matrix with numeric values
-            matrix `table_matrix'[`i', 1] = real("`att'")
-            matrix `table_matrix'[`i', 2] = real("`se'")
-            matrix `table_matrix'[`i', 3] = real("`pval'")
-            matrix `table_matrix'[`i', 4] = real("`jse'")
-            matrix `table_matrix'[`i', 5] = real("`jpval'")
-            // matrix `table_matrix'[`i', 6] = `tmp_ri_pval_att_t'[`i']
-            matrix `table_matrix'[`i', 7]  = .
-            
-            qui scalar `weight_total' = `weight_total' + `sub_agg_weight'
 		}
-
-        if inlist("`weights'", "att", "both") {
-            forvalues i = 1/`nrows' {
-                local sub_agg_weight : word `i' of `sub_agg_weights'
-                matrix `table_matrix'[`i', 7] = `sub_agg_weight' / `weight_total'
-            } 
-        }
-
-		// Set column names for the matrix
-        matrix colnames `table_matrix' = ATT SE pval JKNIFE_SE JKNIFE_pval RI_pval W
-        
-        // Set row names for the matrix using the labels
-        matrix rownames `table_matrix' = `sub_agg_label'
-        
-        // Compute aggregate results
-        clear
-        qui svmat double `table_matrix', names(col)
-        qui gen byte const = 1
-        if inlist("`weights'", "att", "both") {
-            qui gen double sw = sqrt(W)
-            qui replace ATT = ATT * sw
-            qui replace const = const * sw
-        }
-
-        // Compute aggregate ATT and robust SE
-        if `nrows'  > 1 {
-            qui reg ATT const, noconstant vce(robust)
-            qui scalar `agg_att' = _b[const]
-            qui scalar `agg_att_se' = _se[const]
-            qui scalar `agg_att_dof' = e(df_r)
-            qui scalar `agg_att_tstat' = `agg_att' / `agg_att_se'
-            qui scalar `agg_att_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat'))
-        }
-        else {
-            qui scalar `agg_att' = ATT
-            qui scalar `agg_att_se' = .
-            qui scalar `agg_att_pval' = .
-        }
-
-        // Compute jackknife SE
-        if `nrows' > 2 {
-            qui reg ATT const, noconstant vce(jackknife)
-            qui scalar `agg_att_jknife_se' = _se[const]
-            qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
-            qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
-        }
-        else if `nrows' == 2 { // Manually compute since vce(jackknife) fails for n = 2
-            qui scalar `agg_att_jknife_se' = sqrt( ((2-1)/2) * ((ATT[1] - `agg_att')^2 + (ATT[2] - `agg_att')^2))
-            qui scalar `agg_att_tstat_jknife' = `agg_att' / `agg_att_jknife_se'
-            qui scalar `agg_att_jknife_pval' = 2 * ttail(`agg_att_dof', abs(`agg_att_tstat_jknife'))
-        }
-        else {
-            qui scalar `agg_att_jknife_se' = .
-            qui scalar `agg_att_jknife_pval' = .
-        }
-        
-        
 
         // Store the matrix in r()
         return matrix undid = `table_matrix'
@@ -1187,14 +1160,14 @@ program define undid_stage_three, rclass
     di as text "p-value: " as result `agg_att_pval'
     di as text "Jackknife SE: " as result `agg_att_jknife_se'
     di as text "Jackknife p-value: " as result `agg_att_jknife_pval'
-    di as text "RI p-value: " as result ""
+    di as text "RI p-value: " as result `ri_pval_aggregate'
 
     return scalar att = `agg_att'
     return scalar se = `agg_att_se'
     return scalar p = `agg_att_pval'
     return scalar jkse = `agg_att_jknife_se'
     return scalar jkp = `agg_att_jknife_pval'
-    // return scalar rip = `tmp_ri_pval_agg_att'[1]
+    return scalar rip = `ri_pval_aggregate'
 
     qui frame change default
 
@@ -1205,12 +1178,17 @@ end
 qui cap mata: mata which undid_randomize_treatment()
 if _rc {
 mata:
-real matrix undid_randomize_treatment(
+void undid_randomize_treatment(
     real scalar nperm,
     real scalar seed,
     real scalar use_pre_controls,
     real scalar max_attempts,
-    real scalar common_flag
+    real scalar common_flag,
+    string agg,
+    string weighting,
+    real scalar verbose,
+    string scalar ri_pval,
+    string scalar agg_att, | string scalar undid_matrix
 )
 {
     real matrix M, original_treated, all_states, treatment_times, results, combined_results, common_staggered
@@ -1221,35 +1199,49 @@ real matrix undid_randomize_treatment(
     real matrix assigned_tt
     real scalar found_match, assigned_time
 
+    // Randomimzation Inference Part One: Treatment Assignment
     // Get data from Stata
+    original_agg_att = st_numscalar(agg_att)
+    if (agg != "none") {
+        temp_matrix = st_matrix(undid_matrix)
+        original_sub_agg_atts = temp_matrix[.,1]
+    }    
     if (common_flag == 1) {
-        M = st_data(., ("silo_id", "gvar_date", "treat"))
+        M = st_data(., ("silo_id", "gvar_date", "treat", "n", "n_t", "y"))
         nrows = rows(M)
         treat_col = 3
+        n_col = 4
+        n_t_col = 5
+        col_adj = 5
+        y_col = 6
     } 
     else {
-        M = st_data(., ("silo_id", "gvar_date", "t", "treat"))
+        M = st_data(., ("silo_id", "gvar_date", "t", "treat", "n", "n_t", "y"))
         nrows = rows(M)
         treat_col = 4
-    }    
+        n_col = 5
+        n_t_col = 6
+        col_adj = 6
+        y_col = 7
+    }
+    gvar_col = 2
+    silo_col = 1
     
     // Initialize results matrix: nrows x nperm
     results = J(nrows, nperm-1, .)
     
     // Extract unique treated units (where treat == 1)
     original_treated = select(M, M[.,treat_col] :== 1)
-    if (rows(original_treated) == 0) {
-        _error("No treated units found")
-        return(M)  // Return at least the original data
-    }
     original_treated = uniqrows(original_treated[.,(1,2)])
     original_treated_times = original_treated[., 2]
+    original_treated_states = original_treated[., 1]
     k = rows(original_treated)
 
     // Get all unique states and treatment times
     all_states = uniqrows(M[.,1])
     treatment_times = uniqrows(original_treated[.,2])
     n_all_states = rows(all_states)
+    n_treatment_times = rows(treatment_times)
 
     // Set random seed
     if (seed != 0) {
@@ -1270,7 +1262,7 @@ real matrix undid_randomize_treatment(
     seen = seen \ key
     attempts = 0
 
-    // Main randomization loop
+    // Randomization assignment loop
     while (i < nperm & attempts < max_attempts) {
         attempts++
 
@@ -1323,7 +1315,7 @@ real matrix undid_randomize_treatment(
                 if (trt_time == assigned_time) {
                     new_treat[row_idx] = 1
                 } else {
-                    if (use_pre_controls) {
+                    if (use_pre_controls & !common_flag) {
                         t = M[row_idx, 3]
                         if (t < assigned_time) {
                             new_treat[row_idx] = 0
@@ -1345,22 +1337,85 @@ real matrix undid_randomize_treatment(
         attempts=0
     }
 
+    // Store the actual number of permutations in a Stata local
     real scalar actual_perms
     actual_perms = i - 1
-    
-    // Store the actual number of permutations in a Stata local
     st_local("actual_perms", strofreal(actual_perms))
     // Combine original data with randomized results
-    // M has 4 columns: silo_id, gvar_date, t, treat
-    // results has nperm columns of randomized treatments
-    combined_results = M, results[., 1::actual_perms]
+    df = M, results[., 1::actual_perms]
+
+    // Randomimzation Inference Part Two: Computation 
+    att_ri = J(actual_perms, 1, .)
+    if (agg == "g") {
+        l = n_treatment_times
+        att_ri_g = J(actual_perms, l, .)
+        sub_agg_ri_pvals = J(l, 1, .)
+        for (j = 1; j <= actual_perms; j++) {
+            W = J(l, 1, .)
+            for (i = 1; i <= l; i++) {
+                trt = treatment_times[i]
+                temp = select(df, df[.,j+col_adj] :!= -1 :& df[.,gvar_col] :== trt)
+                att_ri_g[j,i] = compute_ri_sub_agg_att(temp, j+col_adj, n_col, y_col, weighting)
+
+                if (weighting == "att" | weighting == "both") {
+                    W[i] = sum(select(temp[.,n_t_col], temp[.,j+col_adj] :== 1))
+                }
+            }
+
+            if (weighting == "att" | weighting == "both") {
+                W = W :/ sum(W)
+            }
+            if (weighting == "diff" | weighting == "none") {
+                W = J(l, 1, 1/l)
+            }
+            att_ri[j] = att_ri_g[j,.] * W
+            if (verbose != 0) {
+                if (mod(j, verbose) :== 0) {
+                    printf("Completed %f of %f permutations! \n", j, actual_perms)
+                }
+            }
+        }
+        for (i = 1; i <= l; i++) {
+            sub_agg_ri_pvals[i] = (sum(abs(att_ri_g[.,i]) :> abs(original_sub_agg_atts[i]))) / actual_perms
+        }
+        temp_matrix[.,6] = sub_agg_ri_pvals
+        st_matrix(undid_matrix, temp_matrix)
+        agg_ri_pval = (sum(abs(att_ri) :> abs(original_agg_att))) / actual_perms
+        st_numscalar(ri_pval, agg_ri_pval)
+    }
     
-    return(combined_results)
+
 }
 end
 }
-    
-    
+qui cap mata: mata which compute_ri_sub_agg_att()
+if _rc {
+mata:
+real scalar compute_ri_sub_agg_att(
+    real matrix temp,
+    real scalar treat_col,
+    real scalar n_col,
+    real scalar y_col,
+    string weighting
+)
+{
+    X = temp[., treat_col]
+    Y = temp[., y_col]
+    mask_trt = X:==1
+    mask_ctrl = X:==0
+    // Calculate weighted dot producted or difference of means to avoid having to invert any matrices
+    if (weighting == "both" | weighting == "diff") {
+        W_diff = temp[., n_col]
+        W_diff = W_diff :/ sum(W_diff)
+        sub_agg_att = ((select(W_diff, mask_trt)' * select(Y, mask_trt)) / sum(select(W_diff, mask_trt))) - ((select(W_diff, mask_ctrl)' * select(Y, mask_ctrl)) / sum(select(W_diff, mask_ctrl)))
+    }
+    if (weighting == "none" | weighting == "att") {
+        sub_agg_att = mean(select(Y, mask_trt)) - mean(select(Y, mask_ctrl))
+    }
+    return(sub_agg_att)
+}
+end
+}
 
 
 /*--------------------------------------*/
