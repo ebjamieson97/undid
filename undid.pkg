@@ -27,3 +27,5 @@ f package_functions/stage_two/undid_stage_two.ado
 f package_functions/stage_two/undid_stage_two.sthlp
 f package_functions/stage_three/undid_stage_three.ado
 f package_functions/stage_three/undid_stage_three.sthlp
+f package_functions/stage_three/undid_plot.ado
+f package_functions/stage_three/undid_plot.sthlp

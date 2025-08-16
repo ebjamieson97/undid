@@ -4,3 +4,4 @@ p undid_init Creates the init.csv
 p undid_diff Creates the empty_diff_df.csv
 p undid_stage_two Runs stage two procedures
 p undid_stage_three Computes sub-aggregate and aggregate ATTs, standard errors, etc.
+p undid_plot Creates parallel trends plots and event study plots
