@@ -6,7 +6,7 @@ version 16
 /*-----------TEST TEST TEST-----------*/
 /*----------undid_stage_three-----------*/
 /*-----------TEST TEST TEST-----------*/
-/*-------version 1.0.0 2025-08-10-----*/
+/*-------version 1.0.0 2025-08-16-----*/
 /*------------------------------------*/
 
 
@@ -41,7 +41,7 @@ if _rc {
 // show trace for up to, say, 1 levels of calls
 
 clear
-set trace on
-set tracedepth 3
+set trace off
+set tracedepth 1
 
-undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("g") weights("both") max_attempts(20) use_pre_controls(0) covariates(0) verbose(250) seed(1234)
+undid_stage_three, dir_path("test_csv_files\stage_three\common") agg("silo") weights("both") max_attempts(20) use_pre_controls(0) covariates(0) verbose(250) seed(123)
