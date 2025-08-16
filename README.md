@@ -7,7 +7,6 @@ A framework for estimating difference-in-differences with unpoolable data, based
 
 Please note that this package is under active development and a few features are not yet implemented:
 - plotting capabilites
-- randomization inference for `agg = "time"`
 - updated sthlp files and documentation
 
 ## Installation
