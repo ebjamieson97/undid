@@ -935,7 +935,13 @@ program define undid_stage_three, rclass
             qui sum gvar_date, meanonly
             local min_gvar = r(min)
             
-            qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(robust)
+            if inlist("`weights'", "diff", "both") {
+                qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(robust)
+            }
+            else {
+                qui reg y const treat ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(robust)
+            }
+            
             local sub_agg_att = _b[treat]
             qui scalar `sub_agg_dof' = e(df_r)
             if `sub_agg_dof' > 0 {
@@ -953,7 +959,12 @@ program define undid_stage_three, rclass
                 local sub_agg_att_jknife_pval "."
             }
             else {
-                qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                if inlist("`weights'", "diff", "both") {
+                    qui reg y const treat c.sw#ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                }
+                else {
+                    qui reg y const treat ib`min_gvar'.(gvar_date) if treat >= 0, noconstant vce(jackknife)
+                }                
                 local sub_agg_att_jknife = _se[treat]
                 qui scalar `sub_agg_tstat' = _b[treat] / _se[treat]
                 qui scalar `sub_agg_dof' = e(N) - 1
@@ -1119,14 +1130,8 @@ program define undid_stage_three, rclass
      qui scalar `actual_perms_scalar' = .
 
      // Call the Mata function and capture the results
-     if inlist("`agg'", "g", "silo", "gt", "sgt", "none") {
-             mata: undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common', "`agg'", "`weights'", `verbose', "`ri_pval_aggregate'", "`actual_perms_scalar'", "`agg_att'", "`table_matrix'")
-     }
-     // else {
-     //         mata: undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common', "`agg'", "`weights'", `verbose', "`ri_pval_aggregate'", "`agg_att'")
-     // }
+     mata: undid_randomize_treatment(`nperm', `seed', `use_pre_controls', `max_attempts', `check_common', "`agg'", "`weights'", `verbose', "`ri_pval_aggregate'", "`actual_perms_scalar'", "`agg_att'", "`table_matrix'")
  
-
     // ---------------------------------------------------------------------------------------- //
     // -------------------------- PART SIX: Return and Display Results ------------------------ // 
     // ---------------------------------------------------------------------------------------- //
@@ -1543,11 +1548,58 @@ void undid_randomize_treatment(
         agg_ri_pval = (sum(abs(att_ri) :> abs(original_agg_att))) / actual_perms
         st_numscalar(ri_pval, agg_ri_pval)
     }
-    
+    else if (agg == "time") {
+        times = sort(uniqrows(M[.,time_col]),1)
+        l = rows(times)
+        att_ri_time = J(actual_perms, l, .)
+        sub_agg_ri_pvals = J(l, 1, .)
+        for (j = 1; j <= actual_perms; j++) {
+            W = J(l, 1, .)
+            for (i = 1; i <= l; i++) {
+                t = times[i]
+                temp = select(df, df[.,j+col_adj] :!= -1 :& df[.,time_col] :== t)
+                Y = temp[.,y_col]
+                X = design_matrix_time_agg((J(rows(temp),1,1),temp[.,(j+col_adj, gvar_col)]), 3)
+                if (weighting == "diff" | weighting == "both") {
+                    W_diff = temp[.,n_col]
+                    W_diff = W_diff :/ sum(W_diff)
+                    sq_W_diff = sqrt(W_diff)
+                    X = X :* sq_W_diff
+                    Y = Y :* sq_W_diff
+                }
+                beta = invsym(X' * X) * (X' * Y)
+                att_ri_time[j,i] = beta[2]
+                if (weighting == "att" | weighting == "both") {
+                    W[i] = sum(select(temp[.,n_t_col], temp[.,j+col_adj] :== 1))
+                }
+            }
+
+            if (weighting == "att" | weighting == "both") {
+                W = W :/ sum(W)
+            }
+            if (weighting == "diff" | weighting == "none") {
+                W = J(l, 1, 1/l)
+            }
+            att_ri[j] = att_ri_time[j,.] * W
+            if (verbose != 0) {
+                if (mod(j, verbose) :== 0) {
+                    printf("Completed %f of %f permutations! \n", j, actual_perms)
+                }
+            }
+        }
+        for (i = 1; i <= l; i++) {
+            sub_agg_ri_pvals[i] = (sum(abs(att_ri_time[.,i]) :> abs(original_sub_agg_atts[i]))) / actual_perms
+        }
+        temp_matrix[.,6] = sub_agg_ri_pvals
+        st_matrix(undid_matrix, temp_matrix)
+        agg_ri_pval = (sum(abs(att_ri) :> abs(original_agg_att))) / actual_perms
+        st_numscalar(ri_pval, agg_ri_pval)
+    }
 
 }
 end
 }
+
 qui cap mata: mata which compute_ri_sub_agg_att()
 if _rc {
 mata:
@@ -1573,6 +1625,29 @@ real scalar compute_ri_sub_agg_att(
         sub_agg_att = mean(select(Y, mask_trt)) - mean(select(Y, mask_ctrl))
     }
     return(sub_agg_att)
+}
+end
+}
+
+qui cap mata: mata which design_matrix_time_agg()
+if _rc {
+mata:
+real matrix design_matrix_time_agg(
+    real matrix temp,
+    real scalar gvar_col
+)
+{
+    gvars = sort(uniqrows(temp[.,gvar_col]),1)
+    if (rows(gvars) == 1) {
+        return(temp[.,(1,2)])
+    }
+    
+    D = J(rows(temp), rows(gvars)-1, .)
+    for (i=2; i<=rows(gvars); i++) {
+        D[.,i-1] = (temp[.,gvar_col] :== gvars[i])
+    }
+    return((temp[.,(1,2)], D))
+
 }
 end
 }
