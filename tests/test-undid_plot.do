@@ -41,7 +41,7 @@ if _rc {
 // show trace for up to, say, 1 levels of calls
 
 clear
-set trace on
+set trace off
 set tracedepth 1
 
-undid_plot, dir_path("test_csv_files\stage_three\staggered") agg("event")
+undid_plot, dir_path("test_csv_files\stage_three\common\")

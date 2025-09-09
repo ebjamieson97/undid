@@ -181,16 +181,27 @@ program define undid_plot
         qui gen double y =  real(mean_outcome)
     }
     else if `covariates' == 1 {
+        qui replace mean_outcome_residualized = "" if mean_outcome_residualized == "NA" | mean_outcome_residualized == "missing"
         qui gen double y = real(mean_outcome_residualized)
+        qui count if missing(y)
+        if r(N) > 0 {
+            di as err "Error: Values of mean_outcome_residualized are missing, try setting covariates(0)."
+            exit 9
+        }
     }
     qui format y %20.15g
 
-    // go back and check mean_outcome for NA or missing values
-    // check mean_outcome_residualized for NA or missing values as well
-    // check that mean_outcome_residualized isn't all NA or missing values
-    // check the n column for missing or NA values and convert to numeric column
-    // if missing values for n, the y value must also be missing for that column
-
+    if `weights' == 1 {
+        qui replace n = "" if n == "NA" | n == "missing"
+        qui destring n, replace
+        qui count if missing(n)
+        if r(N) > 0 {
+            qui levelsof silo_name if missing(n), local(missing_silos) clean
+            di as error "Error: Missing values of n for weights for the following silos: `missing_silos'"
+            exit 10
+        }
+    }
+   
     // cap frame drop filtered_data  
     // frame copy `temploadframe' filtered_data
     // qui frame change filtered_data
