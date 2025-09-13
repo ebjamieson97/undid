@@ -41,7 +41,7 @@ if _rc {
 // show trace for up to, say, 1 levels of calls
 
 clear
-set trace off
+set trace on
 set tracedepth 1
 
-undid_plot, dir_path("test_csv_files\stage_three\common\")
+undid_plot, dir_path("test_csv_files\stage_three\staggered\") plot("event") weights(1)

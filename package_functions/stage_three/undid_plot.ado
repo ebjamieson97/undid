@@ -1,23 +1,23 @@
 /*------------------------------------*/
 /*undid_plot*/
 /*written by Eric Jamieson */
-/*version 0.0.1 2025-09-02 */
+/*version 0.0.1 2025-09-13 */
 /*------------------------------------*/
 cap program drop undid_plot
 program define undid_plot
     version 16
     syntax, dir_path(string) /// 
-            [agg(string) weights(int 1) covariates(int 0) omit_silos(string) include_silos(string)]
+            [plot(string) weights(int 1) covariates(int 0) omit_silos(string) include_silos(string)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
     // ---------------------------------------------------------------------------------------- //
 
-    if "`agg'" == "" {
-        local agg "agg"
+    if "`plot'" == "" {
+        local plot "agg"
     }
-    if !inlist("`agg'", "agg", "dis", "event", "silo") {
-        di as error "'agg' must be set to one of: 'agg', 'dis', 'event', or 'silo'."
+    if !inlist("`plot'", "agg", "dis", "event", "silo") {
+        di as error "'plot' must be set to one of: 'agg', 'dis', 'event', or 'silo'."
         exit 2
     }
 
@@ -36,6 +36,12 @@ program define undid_plot
     if `nfiles' == 0 {
         display as error "No trends_data_*.csv files found in `dir_path'"
         exit 5
+    }
+
+    if "`plot'" == "dis" & `weights' == 1 {
+        di as error "If 'plot' is set to to 'dis' (disaggregate), then weights are not applied."
+        di as error "Overwriting 'weights' to 0."
+        local weights = 0
     }
 
 
@@ -130,10 +136,10 @@ program define undid_plot
         local keep_condition ""
         foreach include_silo of local include_silos {
             if "`keep_condition'" == "" {
-                local keep_condition `"silo == "`include_silo'""'
+                local keep_condition `"silo_name == "`include_silo'""'
             }
             else {
-                local keep_condition `"`keep_condition' | silo == "`include_silo'""'
+                local keep_condition `"`keep_condition' | silo_name == "`include_silo'""'
             }
         }
         qui keep if `keep_condition'
@@ -142,21 +148,23 @@ program define undid_plot
         local drop_condition ""
         foreach omit_silo of local omit_silos {
             if "`drop_condition'" == "" {
-                local drop_condition `"silo != "`omit_silo'""'
+                local drop_condition `"silo_name != "`omit_silo'""'
             }
             else {
-                local drop_condition `"`drop_condition' & silo != "`omit_silo'""'
+                local drop_condition `"`drop_condition' & silo_name != "`omit_silo'""'
             }
         }
         qui keep if `drop_condition'
     }
 
+    // Convert string date information to numeric 
+    local date_format = date_format[1]
+    qui _parse_string_to_date, varname(time) date_format("`date_format'") newvar(t)
+
     // Additional processing for event plot
-    if "`agg'" == "event" {
+    if "`plot'" == "event" {
         qui keep if treatment_time != "control"
-        local date_format = date_format[1]
         qui _parse_string_to_date, varname(treatment_time) date_format("`date_format'") newvar(gvar_date)
-        qui _parse_string_to_date, varname(time) date_format("`date_format'") newvar(t)
         qui gen double event_time = .
         qui gen freq_n = real(word(freq, 1))
         qui gen freq_unit = lower(word(freq, 2))
@@ -174,6 +182,14 @@ program define undid_plot
         }
         qui drop freq_n
         qui drop freq_unit
+    }
+    else {
+        qui gen treated = (treatment_time != "control")
+        preserve
+            qui keep if treatment_time != "control"
+            qui _parse_string_to_date, varname(treatment_time) date_format("`date_format'") newvar(gvar_date)
+            qui levelsof gvar_date, local(treatment_times) clean
+        restore
     }
 
     // Select mean_outcome or mean_outcome_residualized based on covariates option
@@ -201,15 +217,77 @@ program define undid_plot
             exit 10
         }
     }
-   
-    // cap frame drop filtered_data  
-    // frame copy `temploadframe' filtered_data
-    // qui frame change filtered_data
-    // browse
 
     // ---------------------------------------------------------------------------------------- //
-    // -------------------------------- PART THREE: ............ ------------------------------ // 
+    // -------------------------------- PART THREE: Collapse Data ----------------------------- // 
     // ---------------------------------------------------------------------------------------- //
+
+    if "`plot'" == "agg" {
+        if `weights' == 1 {
+            qui bysort t treated: egen total_n = sum(n)
+            qui gen W = n / total_n
+            qui gen weighted_y = W * y
+            qui collapse (sum) y=weighted_y, by(t treated)
+        }
+        else {
+            qui collapse (mean) y=y, by(t treated)
+        }
+    }
+    else if "`plot'" == "silo" {
+        qui replace silo_name = "Control Silos" if treatment_time == "control"
+        if `weights' == 1 {
+            qui bysort t treated silo_name: egen total_n = sum(n)
+            qui gen W = n / total_n
+            qui gen weighted_y = W * y
+            qui collapse (sum) y=weighted_y, by(t treated silo_name)
+        }
+        else {
+            qui collapse (mean) y=y, by(t treated silo_name)
+        }
+    }
+    else if "`plot'" == "event" {
+       if `weights' == 1 {
+        qui bysort event_time: egen total_n = sum(n)
+        qui gen W = n / total_n
+        qui gen weighted_y = W * y
+        qui gen sw = sqrt(W)
+        qui gen sy = sw * y 
+        qui gen se = . 
+        qui gen ci_upper = .
+        qui gen ci_lower = .
+        qui levelsof event_time, local(ev_times)
+        foreach et of local ev_times {
+            qui count if event_time == `et'
+            if r(N) > 1 {
+                qui reg sy sw if event_time == `et', noconstant vce(robust) 
+                qui replace se = _se[sw] if event_time == `et'
+                local t_crit = invttail(e(df_r), 0.025)  
+                qui replace ci_lower = _b[sw] - `t_crit' * _se[sw] if event_time == `et'
+                qui replace ci_upper = _b[sw] + `t_crit' * _se[sw] if event_time == `et'
+            }
+        }
+        qui collapse (sum) y = weighted_y (first) se = se ci_lower = ci_lower ci_upper, by(event_time)
+    }
+        else {
+            qui collapse (mean) y=y, by(event_time)
+        }
+    }
+                       
+
+    // ---------------------------------------------------------------------------------------- //
+    // -------------------------------- PART Four: Plot Data ---------------------------------- // 
+    // ---------------------------------------------------------------------------------------- //
+
+    
+
+
+        // cap frame drop filtered_data  
+        // frame copy `temploadframe' filtered_data
+        // qui frame change filtered_data
+        // browse
+        // exit 
+    
+
 
 
 
