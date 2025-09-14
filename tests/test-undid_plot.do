@@ -45,4 +45,3 @@ set trace off
 set tracedepth 1
 
 undid_plot, dir_path("test_csv_files\stage_three\staggered\") plot("event")
-

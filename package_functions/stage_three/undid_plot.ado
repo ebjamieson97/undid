@@ -1,14 +1,14 @@
 /*------------------------------------*/
 /*undid_plot*/
 /*written by Eric Jamieson */
-/*version 0.0.1 2025-09-13 */
+/*version 1.0.0 2025-09-14 */
 /*------------------------------------*/
 cap program drop undid_plot
 program define undid_plot
     version 16
     syntax, dir_path(string) /// 
             [plot(string) weights(int 1) covariates(int 0) omit_silos(string) include_silos(string) ///
-            treated_colours(string) control_colours(string) ci(int 1)]
+            treated_colours(string) control_colours(string) ci(real 0.95) event_window(numlist min=2 max=2)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -32,9 +32,15 @@ program define undid_plot
         exit 4
     }
 
-    if !inlist(`ci', 0, 1) {
-        di as error "'ci' must be set to either 1 (true) or 0 (false)."
+    if `ci' < 0 | `ci' >= 1 {
+        di as error "'ci' must be between 0 and 1."
         exit 11
+    }
+
+    if "`event_window'" != "" {
+        tokenize `event_window'
+        local event_start `1'
+        local event_end `2'
     }
 
     local files : dir "`dir_path'" files "trends_data_*.csv"
@@ -201,6 +207,7 @@ program define undid_plot
 
     // Select mean_outcome or mean_outcome_residualized based on covariates option
     if `covariates' == 0 {
+        qui drop if mean_outcome == "NA" | mean_outcome == "missing"
         qui gen double y =  real(mean_outcome)
     }
     else if `covariates' == 1 {
@@ -253,12 +260,24 @@ program define undid_plot
         }
     }
     else if "`plot'" == "event" {
-       if `weights' == 1 {
-        qui bysort event_time: egen total_n = sum(n)
-        qui gen W = n / total_n
-        qui gen weighted_y = W * y
-        qui gen sw = sqrt(W)
-        qui gen sy = sw * y 
+        if "`event_window'" != "" {
+            qui drop if event_time < `event_start' | event_time > `event_end'
+        }
+        qui gen intercept = 1
+        if `weights' == 1 {
+            qui bysort event_time: egen total_n = sum(n)
+            qui gen W = n / total_n
+            qui gen weighted_y = W * y
+            qui replace intercept = sqrt(W)
+            qui replace y = intercept * y
+        }
+        else {
+            qui bysort event_time: gen count_obs = _N
+            qui gen W = 1 / count_obs
+            qui gen weighted_y = W * y
+            qui replace intercept = sqrt(W)
+            qui replace y = intercept * y
+        }
         qui gen se = . 
         qui gen ci_upper = .
         qui gen ci_lower = .
@@ -266,19 +285,16 @@ program define undid_plot
         foreach et of local ev_times {
             qui count if event_time == `et'
             if r(N) > 1 {
-                qui reg sy sw if event_time == `et', noconstant vce(robust) 
-                qui replace se = _se[sw] if event_time == `et'
-                local t_crit = invttail(e(df_r), 0.025)  
-                qui replace ci_lower = _b[sw] - `t_crit' * _se[sw] if event_time == `et'
-                qui replace ci_upper = _b[sw] + `t_crit' * _se[sw] if event_time == `et'
+                qui reg y intercept if event_time == `et', noconstant vce(robust) 
+                qui replace se = _se[intercept] if event_time == `et'
+                local t_crit = invttail(e(df_r), ((1-`ci')/2))  
+                qui replace ci_lower = _b[intercept] - `t_crit' * _se[intercept] if event_time == `et'
+                qui replace ci_upper = _b[intercept] + `t_crit' * _se[intercept] if event_time == `et'
             }
         }
         qui collapse (sum) y = weighted_y (first) se = se ci_lower = ci_lower ci_upper, by(event_time)
     }
-        else {
-            qui collapse (mean) y=y, by(event_time)
-        }
-    }
+        
                        
 
     // ---------------------------------------------------------------------------------------- //
@@ -369,42 +385,26 @@ program define undid_plot
             scheme(s1mono)
     } 
     else if "`plot'" == "event" {
-        if `weights' == 0 | `ci' == 0 {
-            twoway (line y event_time, lcolor(navy) lwidth(medthick) lpattern(solid)) ///
-                   (scatter y event_time, mcolor(navy) msize(small) msymbol(circle)), ///
-                   xline(0, lcolor(gray) lpattern(dot) lwidth(thick)) ///
-                   yline(0, lcolor(black) lpattern(solid) lwidth(thin)) ///
-                   xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
-                   ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
-                   legend(off) ///
-                   xtitle("Time Since Event (Period Length: `period_length')", size(medsmall)) ///
-                   ytitle("Outcome Variable", size(medsmall)) ///
-                   title("Event Study Plot", size(medium) color(black)) ///
-                   subtitle("Plot Type: Event Study", size(small)) ///
-                   graphregion(color(white) lcolor(black)) ///
-                   plotregion(lcolor(black) lwidth(thin)) ///
-                   scheme(s1mono)
-        }
-        else {
+            local display_ci = `ci' * 100
             twoway (rarea ci_upper ci_lower event_time, color(ltblue%60) lwidth(none)) ///
                    (line y event_time, lcolor(navy) lwidth(medthick) lpattern(solid)) ///
                    (scatter y event_time, mcolor(navy) msize(small) msymbol(circle)), ///
                    xline(0, lcolor(gray) lpattern(dot) lwidth(thick)) ///
                    yline(0, lcolor(black) lpattern(solid) lwidth(thin)) ///
-                   xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
+                   xlabel(minmax, grid glcolor(gs14) glwidth(vthin)) ///
                    ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
-                   legend(order(2 "Point Estimate" 1 "95% CI") ///
+                   legend(order(2 "Point Estimate" 1 "`display_ci'% CI") ///
                           position(6) ring(1) cols(2) size(small) ///
                           region(lcolor(none) fcolor(none))) ///
                    xtitle("Time Since Event (Period Length: `period_length')", size(medsmall)) ///
                    ytitle("Outcome Variable", size(medsmall)) ///
                    title("Event Study Plot", size(medium) color(black)) ///
-                   subtitle("Plot Type: Event Study with 95% Confidence Intervals", size(small)) ///
+                   subtitle("Plot Type: Event Study with `display_ci'% Confidence Intervals", size(small)) ///
                    graphregion(color(white) lcolor(black)) ///
                    plotregion(lcolor(black) lwidth(thin)) ///
                    scheme(s1mono)
-        }
     }
+    
 
 end 
 

@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_stage_three*/
 /*written by Eric Jamieson */
-/*version 0.0.1 2025-08-16 */
+/*version 1.0.0 2025-08-16 */
 /*------------------------------------*/
 cap program drop undid_stage_three
 program define undid_stage_three, rclass
@@ -1671,4 +1671,4 @@ end
 /*--------------------------------------*/
 /* Change Log */
 /*--------------------------------------*/
-*0.1.0 - created function
+*1.0.0 - created function
