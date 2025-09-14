@@ -44,4 +44,4 @@ clear
 set trace off
 set tracedepth 1
 
-undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("sgt")max_attempts(20) use_pre_controls(0) weights("none") covariates(1) verbose(250) seed(123)
+undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("sgt")max_attempts(20) use_pre_controls(0) weights("none") covariates(1) verbose(250) seed(123) check_anon_size(1)

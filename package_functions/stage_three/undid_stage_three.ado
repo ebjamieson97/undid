@@ -8,7 +8,7 @@ program define undid_stage_three, rclass
     version 16
     syntax, dir_path(string) /// 
             [agg(string) weights(string) covariates(int 0) use_pre_controls(int 0) ///
-            nperm(int 1001) verbose(int 0) seed(int 0) max_attempts(int 100)]
+            nperm(int 1001) verbose(int 0) seed(int 0) max_attempts(int 100) check_anon_size(int 1)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -29,6 +29,11 @@ program define undid_stage_three, rclass
     if !inlist(`use_pre_controls', 0, 1) {
         di as error "Error: use_pre_controls must be set to either 0 (false) or 1 (true)."
         exit 8
+    }
+
+    if !inlist(`check_anon_size', 0, 1) {
+        di as error "Error: 'check_anon_size' must be set to either 0 (false) or 1 (true)."
+        exit 17
     }
 
     // Check other numeric args
@@ -464,12 +469,22 @@ program define undid_stage_three, rclass
     
     // Encode silo_name as silo_id so it can looped thru in the same way in Stata + Mata
     qui encode silo_name, gen(silo_id)
-    //preserve
-    //qui keep silo_id silo_name
-    //qui duplicates drop
-    //qui tempfile silo_mapping
-    //qui save `silo_mapping'
-    //restore
+
+    // Check anon size if requested
+    if `check_anon_size' == 1 {
+        preserve
+            qui drop if anonymize_size == "NA" | anonymize_size == "missing"
+            qui count 
+            if r(N) > 0 {
+                qui duplicates drop silo_name anonymize_size, force
+                di as result "Displaying anonymize_size option used at any included silo:"
+                list silo_name anonymize_size
+            }
+            else {
+                di as result "None of the included silos used the anonymize_size option."
+            }
+        restore
+    }
 
     // After all the pre-processing checks are done, can finally move on to regressions
 
