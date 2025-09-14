@@ -7,7 +7,8 @@ cap program drop undid_plot
 program define undid_plot
     version 16
     syntax, dir_path(string) /// 
-            [plot(string) weights(int 1) covariates(int 0) omit_silos(string) include_silos(string)]
+            [plot(string) weights(int 1) covariates(int 0) omit_silos(string) include_silos(string) ///
+            treated_colours(string) control_colours(string) ci(int 1)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -29,6 +30,11 @@ program define undid_plot
     if !inlist(`covariates', 0, 1)  {
         di as error "'covariates' must be set to either 1 (true) or 0 (false)."
         exit 4
+    }
+
+    if !inlist(`ci', 0, 1) {
+        di as error "'ci' must be set to either 1 (true) or 0 (false)."
+        exit 11
     }
 
     local files : dir "`dir_path'" files "trends_data_*.csv"
@@ -159,6 +165,7 @@ program define undid_plot
 
     // Convert string date information to numeric 
     local date_format = date_format[1]
+    local period_length = freq[1]
     qui _parse_string_to_date, varname(time) date_format("`date_format'") newvar(t)
 
     // Additional processing for event plot
@@ -227,10 +234,10 @@ program define undid_plot
             qui bysort t treated: egen total_n = sum(n)
             qui gen W = n / total_n
             qui gen weighted_y = W * y
-            qui collapse (sum) y=weighted_y, by(t treated)
+            qui collapse (sum) y=weighted_y, by(t treated time)
         }
         else {
-            qui collapse (mean) y=y, by(t treated)
+            qui collapse (mean) y=y, by(t treated time)
         }
     }
     else if "`plot'" == "silo" {
@@ -278,18 +285,126 @@ program define undid_plot
     // -------------------------------- PART Four: Plot Data ---------------------------------- // 
     // ---------------------------------------------------------------------------------------- //
 
-    
+    if "`plot'" == "agg" {
+        twoway (line y t if treated == 0, lcolor(navy) lwidth(medthick) lpattern(solid)) ///
+               (line y t if treated == 1, lcolor(cranberry) lwidth(medthick) lpattern(solid)) ///
+               (scatter y t if treated == 0, mcolor(navy) msize(small) msymbol(square)) ///
+               (scatter y t if treated == 1, mcolor(cranberry) msize(small) msymbol(triangle)), ///
+               xline(`treatment_times', lcolor(gray) lpattern(dot) lwidth(thick)) ///
+               xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
+               ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
+               legend(order(1 "Control Group" 2 "Treatment Group") ///
+                      position(6) ring(1) cols(2) size(small) ///
+                      region(lcolor(none) fcolor(none))) ///
+               xtitle("Time", size(medsmall)) ///
+               ytitle("Outcome Variable", size(medsmall)) ///
+               title("Parallel Trends Plot", size(medium) color(black)) ///
+               subtitle("Plot Type: Aggregated", size(small)) ///
+               graphregion(color(white) lcolor(black)) ///
+               plotregion(lcolor(black) lwidth(thin)) ///
+               scheme(s1mono)
+    }
+    else if inlist("`plot'", "dis", "silo") {
+        levelsof silo_name, local(silos)
+        local n_silos : word count `silos'
+        local ncols = min(5, max(2, ceil(`n_silos'/10)))
+        if "`treated_colours'" == "" {
+            local treated_colours "cranberry maroon red orange_red dkorange sienna brown gold pink magenta purple"
+        }
+        if "`control_colours'" == "" {
+            local control_colours "navy dknavy blue midblue ltblue teal dkgreen emerald forest_green mint cyan"
+        }
+        local n_treated_colours : word count `treated_colours'
+        local n_control_colours : word count `control_colours'
+        local plot_cmd "twoway"
+        local legend_spec "legend(order("
+        local line_counter = 1  
+        local treated_count = 0
+        local control_count = 0
 
+        if "`plot'" == "dis" {
+            local subtitle "Plot Type: Disaggregated"
+        } 
+        else {
+            local subtitle "Plot Type: Silo"
+        }
 
-        // cap frame drop filtered_data  
-        // frame copy `temploadframe' filtered_data
-        // qui frame change filtered_data
-        // browse
-        // exit 
-    
+        foreach silo of local silos {
+            qui sum treated if silo_name == "`silo'"
+            local is_treated = r(mean)
 
-
-
+            if `is_treated' == 1 {
+                local treated_count = `treated_count' + 1
+                local color_index = mod(`treated_count'-1, `n_treated_colours') + 1
+                local color : word `color_index' of `treated_colours'
+                local symbol "triangle" 
+                local legend_spec `"`legend_spec' `line_counter' "`silo' (T)""'
+            }
+            else {
+                local control_count = `control_count' + 1
+                local color_index = mod(`control_count'-1, `n_control_colours') + 1
+                local color : word `color_index' of `control_colours'
+                local symbol "square"  
+                local legend_spec `"`legend_spec' `line_counter' "`silo' (C)""'
+            }
+       
+            local plot_cmd `"`plot_cmd' (line y t if silo_name == "`silo'", lwidth(medthick) lcolor(`color'))"'
+            local plot_cmd `"`plot_cmd' (scatter y t if silo_name == "`silo'", mcolor(`color') msize(small) msymbol(`symbol'))"'
+            local line_counter = `line_counter' + 2 
+        }
+   
+        local legend_spec `"`legend_spec') position(6) ring(1) cols(`ncols') size(small) region(lcolor(none) fcolor(none)))"'
+   
+        `plot_cmd', ///
+            xline(`treatment_times', lcolor(gray) lpattern(dot) lwidth(thick)) ///
+            xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
+            ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
+            `legend_spec' ///
+            xtitle("Time", size(medsmall)) ///
+            ytitle("Outcome Variable", size(medsmall)) ///
+            title("Parallel Trends Plot", size(medium) color(black)) ///
+            subtitle("`subtitle'", size(small)) ///
+            graphregion(color(white) lcolor(black)) ///
+            plotregion(lcolor(black) lwidth(thin)) ///
+            scheme(s1mono)
+    } 
+    else if "`plot'" == "event" {
+        if `weights' == 0 | `ci' == 0 {
+            twoway (line y event_time, lcolor(navy) lwidth(medthick) lpattern(solid)) ///
+                   (scatter y event_time, mcolor(navy) msize(small) msymbol(circle)), ///
+                   xline(0, lcolor(gray) lpattern(dot) lwidth(thick)) ///
+                   yline(0, lcolor(black) lpattern(solid) lwidth(thin)) ///
+                   xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
+                   ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
+                   legend(off) ///
+                   xtitle("Time Since Event (Period Length: `period_length')", size(medsmall)) ///
+                   ytitle("Outcome Variable", size(medsmall)) ///
+                   title("Event Study Plot", size(medium) color(black)) ///
+                   subtitle("Plot Type: Event Study", size(small)) ///
+                   graphregion(color(white) lcolor(black)) ///
+                   plotregion(lcolor(black) lwidth(thin)) ///
+                   scheme(s1mono)
+        }
+        else {
+            twoway (rarea ci_upper ci_lower event_time, color(ltblue%60) lwidth(none)) ///
+                   (line y event_time, lcolor(navy) lwidth(medthick) lpattern(solid)) ///
+                   (scatter y event_time, mcolor(navy) msize(small) msymbol(circle)), ///
+                   xline(0, lcolor(gray) lpattern(dot) lwidth(thick)) ///
+                   yline(0, lcolor(black) lpattern(solid) lwidth(thin)) ///
+                   xlabel(, grid glcolor(gs14) glwidth(vthin)) ///
+                   ylabel(, grid glcolor(gs14) glwidth(vthin)) ///
+                   legend(order(2 "Point Estimate" 1 "95% CI") ///
+                          position(6) ring(1) cols(2) size(small) ///
+                          region(lcolor(none) fcolor(none))) ///
+                   xtitle("Time Since Event (Period Length: `period_length')", size(medsmall)) ///
+                   ytitle("Outcome Variable", size(medsmall)) ///
+                   title("Event Study Plot", size(medium) color(black)) ///
+                   subtitle("Plot Type: Event Study with 95% Confidence Intervals", size(small)) ///
+                   graphregion(color(white) lcolor(black)) ///
+                   plotregion(lcolor(black) lwidth(thin)) ///
+                   scheme(s1mono)
+        }
+    }
 
 end 
 
