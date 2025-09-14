@@ -6,7 +6,6 @@ A framework for estimating difference-in-differences with unpoolable data, based
 ## Warning: Package Under Development
 
 Please note that this package is under active development and a few features are not yet implemented:
-- plotting capabilites
 - updated sthlp files and documentation
 
 ## Installation
