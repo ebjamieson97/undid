@@ -44,4 +44,4 @@ clear
 set trace off
 set tracedepth 1
 
-undid_plot, dir_path("test_csv_files\stage_three\staggered\") plot("event")
+undid_plot, dir_path("test_csv_files\stage_three\staggered\") plot("event") ci(0.90) event_window(-7 7)
