@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0 15feb2025}
+{* *! version 1.0.0 14sept2025}
 {help undid_diff:undid_diff}
 {hline}
 
@@ -30,8 +30,8 @@ Optional parameters:
 - {bf:freq_multiplier} : An integer which specifies if the frequency should be multiplied by a non-zero integer. 
 For example, if the time periods to consider are two years, set freq("year") freq_multiplier(2)
 
-- {bf:weights} : A string indicating the type of weighting to use in the case of common adoption. Defaults to "standard". Options are:
-    -> "standard" weighs each silo according to (num of obs after and at the treatment period) / (num of obs)
+- {bf:weights} : A string indicating the type of weighting to use. Defaults to "both". Options are:
+    -> "none", "diff", "att", or "both". The various options describe the level at which weights are applied (to the contrasts/differences, to the sub-aggregate ATTs, to both, or to none).
 
 - {bf:filename} : A string specifying the outputted filename. Must end in ".csv". Defaults to "empty_diff_df.csv".
 

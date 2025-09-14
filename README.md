@@ -3,11 +3,6 @@ A framework for estimating difference-in-differences with unpoolable data, based
 
 ![undid schematic](./images/undid_schematic.png)
 
-## Warning: Package Under Development
-
-Please note that this package is under active development and a few features are not yet implemented:
-- updated sthlp files and documentation
-
 ## Installation
 ```stata
 net install undid, from("https://raw.githubusercontent.com/ebjamieson97/undid/main/")
@@ -109,8 +104,8 @@ Creates the `empty_diff_df.csv` which lists all of the differences that need to 
   Specify if the frequency should be multiplied by a non-zero integer. For example, if the time periods to consider are two years, set `freq("years") freq_multiplier(2)`.
 
 - **weights** (*string, optional*):
-  A string indicating the type of weighting to use in the case of common adoption. Defaults to "standard". Options are:
-  - "standard" weighs each silo according to: (num of obs after and at the treatment period) / (num of obs)
+  A string indicating the type of weighting to use. Defaults to "both". Options are:
+  - "none", "diff", "att", or "both". The various options describe the level at which weights are applied (to the contrasts/differences, to the sub-aggregate ATTs, to both, or to none).
 
 - **filename** (*string, optional*):  
   A string specifying the outputted filename. Must end in `.csv`. Defaults to `"init.csv"`.
@@ -127,15 +122,15 @@ empty_diff_df.csv saved to: C:\Users\Eric Bruce Jamieson\Documents\My Cool undid
 
 ## Stage Two: Silos
 
-#### 3. `undid_stage_two` - Creates an two CSV files (filled_diff_df_silo_name.csv and trends_data_silo_name.csv) and displays their filepaths
+#### 3. `undid_stage_two` - Creates two CSV files (filled_diff_df_silo_name.csv and trends_data_silo_name.csv) and displays their filepaths
 
 Based on the information given in the `empty_diff_df.csv`, computes the appropriate differences in mean outcomes at the local silo and saves as `filled_diff_df_silo_name.csv`. 
 
-Note that the `time_column` should reference a string variable. This is in order to facilitate passing date information between Stata and Julia. 
+Note that the `time_column` should reference a string variable.
 
 Further, covariates at the local silo should be renamed to match the spelling used in the `empty_diff_df.csv`. 
 
-Ensure that the local silo data is loaded as Stata's active dataset before running `undidjl_stage_two`. 
+Ensure that the local silo data is loaded as Stata's active dataset before running `undid_stage_two`. 
 
 **Parameters:**
 
@@ -185,7 +180,7 @@ C:/Users/User/Current Folder/trends_data_73.csv
 
 Takes in all of the `filled_diff_df_silo_name.csv`'s and uses them to compute the aggregate ATT and standard errors. 
 
-The `agg` parameter specifies the aggregation method used in the case of staggered adoption. By default it is set to `"g"` so that the ATTs are aggregated across the various treatment times, but can be set to any of `"g"`, `"gt"`, `"silo"`, `"sgt"`, `"time"`, `"none"`. 
+The `agg` parameter specifies the aggregation method to be used. By default it is set to `"g"` so that the ATTs are aggregated across the various treatment times, but can be set to any of `"g"`, `"gt"`, `"silo"`, `"sgt"`, `"time"`, `"none"`. 
 
 For common adoption scenarios, the valid aggregation methods are `"silo"` and `"none"` (as there is only one treatment time so there are not multiple sub-aggregate ATTs to be calculated for each treatment time). 
 
@@ -207,7 +202,7 @@ For common adoption scenarios, the valid aggregation methods are `"silo"` and `"
   An integer, either 0 (false) or 1 (true). If set to true, computations will use contrasts (diffs) from pre-treatment periods of treatment silos as controls where applicable. Defaults to 0 (false).
 
 - **nperm** (*int, optional*):
-  An integer, defines the number of random permutations to consider for the randomization inference procedure. Defaults to 1001. 
+  An integer, defines the number of random permutations to consider for the randomization inference procedure. Defaults to 1000. 
 
 - **verbose** (*int, optional*):
   An integer, either 0 (false) or 1 (true), which if set to 1 (true) will display progress messages as the randomization inference procedure is being executed. Defaults to 1 (true).
@@ -215,6 +210,11 @@ For common adoption scenarios, the valid aggregation methods are `"silo"` and `"
 - **seed** (*int, optional*):
   An integer which allows you to set the seed for the randomization inference procedure. If set to 0, does not set a seed. Defaults to 0.
 
+- **max_attempts** (*int, optional*):
+  An integer, sets the maximum number of attempts to find a new unique random permutations during the randomization inference procedure. Defaults to 100.
+
+- **check_anon_size** (*int, optional*):
+  An integer, either 0 (false) or 1 (true), which if toggled on, displays which silos enabled the 'anonymize_weights' argument in stage two, and the respective 'anonymize_size' values. Defaults to 0.
 
 ```stata
 undid_stage_three, dir_path("C:/Users/User/Documents/Files From Silos")
@@ -224,19 +224,19 @@ undid_stage_three, dir_path("C:/Users/User/Documents/Files From Silos")
 -----------------------------------------------------------------------------------------------------
 Sub-Aggregate Group       | ATT             | SE     | p-val  | JKNIFE SE  | JKNIFE p-val | RI p-val
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1991                      |0.0529100        | 0.022  | 0.017  | 0.024      | 0.030        |.|
+1991                      |0.0529100        | 0.022  | 0.017  | 0.024      | 0.030        |0.519    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1993                      |0.0235928        | 0.017  | 0.155  | 0.019      | 0.204        |.|
+1993                      |0.0235928        | 0.017  | 0.155  | 0.019      | 0.204        |0.701    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1996                      |0.0564351        | 0.024  | 0.021  | 0.029      | 0.057        |.|
+1996                      |0.0564351        | 0.024  | 0.021  | 0.029      | 0.057        |0.473    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1997                      |0.0711167        | 0.023  | 0.002  | 0.027      | 0.009        |.|
+1997                      |0.0711167        | 0.023  | 0.002  | 0.027      | 0.009        |0.203    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1998                      |0.0485436        | 0.033  | 0.143  | 0.039      | 0.213        |.|
+1998                      |0.0485436        | 0.033  | 0.143  | 0.039      | 0.213        |0.497    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1999                      |0.0120440        | 0.015  | 0.424  | 0.021      | 0.561        |.|
+1999                      |0.0120440        | 0.015  | 0.424  | 0.021      | 0.561        |0.876    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-2000                      |-0.0330623       | 0.032  | 0.308  | 0.096      | 0.732        |.|
+2000                      |-0.0330623       | 0.032  | 0.308  | 0.096      | 0.732        |0.705    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
 
 ------------------------------
@@ -244,28 +244,90 @@ Sub-Aggregate Group       | ATT             | SE     | p-val  | JKNIFE SE  | JKN
 ------------------------------
 Aggregation: g
 Weighting: both
-Aggregate ATT: .04317447
-Standard error: .00803168
-p-value: .00170286
-Jackknife SE: .00867386
-Jackknife p-value: .00250789
-RI p-value: 
+Aggregate ATT: .04582252
+Standard error: .01159691
+p-value: .00752668
+Jackknife SE: .01329357
+Jackknife p-value: .01368368
+RI p-value: .13
+Permutations: 1000
+
+. matrix list r(undid)
+
+r(undid)[7,7]
+              ATT           SE         pval    JKNIFE_SE  JKNIFE_pval      RI_pval            W
+1991    .05290996    .02211803    .01719025    .02436901    .03047674         .519    .20179564
+1993    .02359277    .01657012    .15543384     .0185242    .20368142         .701    .19153484
+1996    .05643511    .02422739    .02079763    .02943819    .05659252         .473    .07567336
+1997    .07111675    .02296333    .00228761    .02697387    .00914768         .203    .32107738
+1998    .04854361     .0329081    .14265341    .03876623    .21277512         .497    .10859342
+1999    .01204398    .01497416    .42353915     .0206109    .56056965         .876    .03548525
+2000   -.03306235    .03203586    .30810225     .0958573    .73188176         .705     .0658401
+
+. di r(att)
+.04582252
+
+. di r(se)
+.01159691
+
+. di r(p)
+.00752668
+
+. di r(jkse)
+.01329357
+
+. di r(jkp)
+.01368368
+
+. di r(rip)
+.13
+
+. di r(perms)
+1000
 
 ```
 
-#### 7. `undid_plot` - Plots parallel trends figures
+#### 7. `undid_plot` - Plots parallel trends figures or event study plots
 
-Combines all of the `trends_data_silo_name.csv` files and uses this data to plot trends 
+Combines all of the `trends_data_silo_name.csv` files and uses this data to plot parallel trends figures or event study plots.
 
 **Parameters:**
 
 - **dir_path** (*string, required*):  
   A string specifying the filepath to the folder containing all of the `trends_data_silo_name.csv`'s.
 
+- **plot** (*string, optional*):
+  Specifies the type of plot to make. Options are: "agg", "dis", "silo", or "event". Defaults to "agg".
+
+- **weights** (*int, optional*):
+  Either 1 (true) or 0 (false), which determines whether or not the weights should be used. Defaults to 1.
+
+- **covariates** (*int, optional*):
+  either 1 (true) or 0 (false), which specifies whether to use the `mean_outcome` column or the `mean_outcome_residualized` column from the trends data CSV files while plotting. Setting to 0 (false) selects the `mean_outcome` column and 1 (true) selects the `mean_outcome_residualized` column. Defaults to 0 (false).
+
+- **omit_silos** (*string, optional*):
+  Silo names separated by spaces, indicating any silos to omit from the plot.
+
+- **include_silos** (*string, optional*):
+  Silo names separated by spaces, indicating to only include these silos in the plot.
+
+- **treated_colours** (*string, optional*):
+  Different colours seprated by spaces, used to select the colours used for treated silos when the 'plot' argument is set to either "silo" or "dis". Defaults to "cranberry maroon red orange_red dkorange sienna brown gold pink magenta purple".
+
+- **control_colours** (*string, optional*):
+  Different colours seprated by spaces, used to select the colours used for control silos when the 'plot' argument is set to either "silo" or "dis". Defaults to "navy dknavy blue midblue ltblue teal dkgreen emerald forest_green mint cyan".
+
+- **ci** (*real, optional*):
+  Between 0 and 1, used to indicate the confidence interval for event study plots, i.e. when the 'plot' argument is set to  "event". Setting to 0 toggles off the confidence intervals. Defaults to 0.95.
+
+- **event_window** (*numlist, optional*):
+  If supplied, determines the periods before (the first value) and the periods after (the second value) the event that should be included in the plot.
+
 ```stata
-undid_plot, 
+undid_plot, dir_path("C:/Users/User/Documents/Files From Silos") plot("event") ci(0.90) event_window(-7 7)
 ```
 
+![event study plot](./images/event_study.png)
 
 ### Appendix
 

@@ -4,7 +4,7 @@ version 16
 
 /*------------------------------------*/
 /*-----------TEST TEST TEST-----------*/
-/*----------undid_stage_three-----------*/
+/*----------undid_plot----------------*/
 /*-----------TEST TEST TEST-----------*/
 /*-------version 1.0.0 2025-08-16-----*/
 /*------------------------------------*/
@@ -34,7 +34,7 @@ if _rc {
 
 
 * ---------------------------------------------- *
-* Step 3: Load in silo data and try variations of undid_stage_three
+* Step 3: Load in silo data and try variations of undid_plot
 * make sure proper error messages display
 * ensure outputs are correct
 * ---------------------------------------------- *
@@ -44,4 +44,4 @@ clear
 set trace off
 set tracedepth 1
 
-undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("g") verbose(250)
+undid_plot, dir_path("test_csv_files\stage_three\staggered\") plot("event") ci(0.90) event_window(-7 7)

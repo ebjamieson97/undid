@@ -1,14 +1,14 @@
 /*------------------------------------*/
 /*undid_stage_three*/
 /*written by Eric Jamieson */
-/*version 1.0.0 2025-08-16 */
+/*version 1.0.0 2025-09-14 */
 /*------------------------------------*/
 cap program drop undid_stage_three
 program define undid_stage_three, rclass
     version 16
     syntax, dir_path(string) /// 
             [agg(string) weights(string) covariates(int 0) use_pre_controls(int 0) ///
-            nperm(int 1001) verbose(int 0) seed(int 0) max_attempts(int 100) check_anon_size(int 1)]
+            nperm(int 1000) verbose(int 0) seed(int 0) max_attempts(int 100) check_anon_size(int 0)]
 
     // ---------------------------------------------------------------------------------------- //
     // ---------------------------- PART ONE: Basic Input Checks ------------------------------ // 
@@ -39,8 +39,11 @@ program define undid_stage_three, rclass
     // Check other numeric args
     // Check nperm
     if `nperm' < 1 {
-        di as error "Error: nperm must be greater than 0"  // Still will need to check compute_nperm_count later on...
+        di as error "Error: nperm must be greater than 0" 
         exit 5
+    }
+    else {
+        local nperm = `nperm' + 1
     }
     // Process seed
     if "`seed'" != "0" {
@@ -1172,7 +1175,12 @@ program define undid_stage_three, rclass
 			di as text "--------------------------|-----------------|--------|--------|------------|--------------|---------|"
             
 		}
-
+		// Set column names for the matrix
+        matrix colnames `table_matrix' = ATT SE pval JKNIFE_SE JKNIFE_pval RI_pval W
+        
+        // Set row names for the matrix using the labels
+        matrix rownames `table_matrix' = `sub_agg_label'
+        
         // Store the matrix in r()
         return matrix undid = `table_matrix'
 

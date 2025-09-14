@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0 07apr2025}
+{* *! version 1.0.0 14sept2025}
 {help undid_stage_two:undid_stage_two}
 {hline}
 
@@ -23,15 +23,17 @@ Required parameters:
 
 - {bf:outcome_column} : Variable name specifying the variable containing the outcome of interest. Must reference a numeric column.
 
-- {bf:silo__date_format} : A string which specifies the date format used in the local silo data. Options are:
+- {bf:silo_date_format} : A string which specifies the date format used in the local silo data. Options are:
     -> "ddmonyyyy yyyym00 yyyy/mm/dd yyyy-mm-dd yyyymmdd yyyy/dd/mm yyyy-dd-mm yyyyddmm dd/mm/yyyy dd-mm-yyyy ddmmyyyy mm/dd/yyyy mm-dd-yyyy mmddyyyy yyyy"
 
 Optional parameters:
 
 - {bf:consider_covariates} : An integer which if set to 0 will cause `undid_stage_two` to ignore any calculations involving covariates. Can only be 1 or 0. Defaults to 1. 
 
-- {bf:freq_multiplier} : An integer which specifies if the frequency should be multiplied by a non-zero integer. 
-For example, if the time periods to consider are two years, set freq("year") freq_multiplier(2)
+- {bf:anonymize_weights} : An integer, either 0 (false) or 1 (true), which determines if the counts of n (# of obs. used to calculate a contrast/difference)
+  and n_t (# of treated obs. used in the calculation of a contrast/difference) should be rounded. Defaults to 0.
+
+- {bf:anonymize_size} : An integer. Counts will be rounded to the nearest multiple of this value if 'anonymize_weights' is toggled on. Defaults to 5.
 
 - {bf:filepath} : A string specifying the path to the folder in which to save the output file, e.g. "`c(pwd)'". Defaults to "`c(tempdir)'".
 
@@ -39,7 +41,7 @@ For example, if the time periods to consider are two years, set freq("year") fre
 {title:Syntax}
 
 {pstd}
-{cmd:undid_stage_two} empty_diff_filepath(string) silo_name(string) time_column(varname) outcome_column(varname) silo_date_format(string) [{it:consider_covariates(int)} {it:filepath(string)}]{p_end}
+{cmd:undid_stage_two} empty_diff_filepath(string) silo_name(string) time_column(varname) outcome_column(varname) silo_date_format(string) [{it:consider_covariates(int)} {it:anonymize_weights(int)} {it:anonymize_size(int)} {it:filepath(string)}]{p_end}
 
 {title:Examples}
 
