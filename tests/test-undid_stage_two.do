@@ -7,7 +7,7 @@ version 16
 /*----------undid_stage_two-----------*/
 /*-----------TEST TEST TEST-----------*/
 /*--------------UNTESTED---------------*/
-/*-------version 1.0.0 2025-06-07-----*/
+/*-------version 1.1.0 2025-09-30-----*/
 /*------------------------------------*/
 /*EXITS 1 to 13: PASSING --------------*/
 
@@ -42,14 +42,26 @@ if _rc {
 * ---------------------------------------------- *
 
 
+
+
+
+
 use "test_dta_files\merit.dta", clear
-local states 71 58 64 59 85 57 72 61 34 88 11
+
+
+
+qui levelsof state, local(states)
 foreach s of local states {
 	use "test_dta_files\merit.dta", clear
 	keep if state == `s'
-
+	if `s' == 71 {
+		keep if year != 1993
+	}
+	if `s' == 11 {
+		keep if year != 1992
+	}
 	tostring year, replace
-	undid_stage_two, empty_diff_filepath("test_csv_files\stage_three\staggered\missing_vals\only11control\empty_diff_df.csv") silo_name(`s') time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("`c(pwd)'") anonymize_weights(0)
+	undid_stage_two, empty_diff_filepath("test_csv_files\empty_diff_df_staggered.csv") silo_name(`s') time_column(year) outcome_column(coll) silo_date_format("yyyy") filepath("test_csv_files\stage_three\staggered\missing_vals\noyr93_ins71_noyr92_ins11") anonymize_weights(0)
 
 
 }

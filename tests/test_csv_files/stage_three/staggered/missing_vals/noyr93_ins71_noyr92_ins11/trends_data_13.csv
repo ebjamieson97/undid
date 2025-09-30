@@ -1,13 +1,13 @@
 silo_name,treatment_time,time,mean_outcome,mean_outcome_residualized,covariates,date_format,freq,n
-13,control,1989,.5555555555555556,.3333333333333333,asian;black;male,yyyy,1 year,36
-13,control,1990,.3928571428571428,.1428571428571428,asian;black;male,yyyy,1 year,28
-13,control,1991,.2727272727272727,.1363636363636364,asian;black;male,yyyy,1 year,22
-13,control,1992,.4347826086956522,.217391304347826,asian;black;male,yyyy,1 year,23
-13,control,1993,.6190476190476191,.4285714285714285,asian;black;male,yyyy,1 year,21
-13,control,1994,.44,.2,asian;black;male,yyyy,1 year,25
-13,control,1995,.36,.16,asian;black;male,yyyy,1 year,25
-13,control,1996,.3846153846153846,.282051282051282,asian;black;male,yyyy,1 year,39
-13,control,1997,.3333333333333333,.1515151515151515,asian;black;male,yyyy,1 year,33
-13,control,1998,.32,.24,asian;black;male,yyyy,1 year,25
-13,control,1999,.5,.125,asian;black;male,yyyy,1 year,24
-13,control,2000,.3181818181818182,.1818181818181818,asian;black;male,yyyy,1 year,22
+13,control,1989,0.555555555555555580,0.333333333333333315,asian;black;male,yyyy,1 year,36
+13,control,1990,0.392857142857142794,0.142857142857142794,asian;black;male,yyyy,1 year,28
+13,control,1991,0.272727272727272707,0.136363636363636409,asian;black;male,yyyy,1 year,22
+13,control,1992,0.434782608695652217,0.217391304347825998,asian;black;male,yyyy,1 year,23
+13,control,1993,0.619047619047619069,0.428571428571428492,asian;black;male,yyyy,1 year,21
+13,control,1994,0.440000000000000002,0.200000000000000011,asian;black;male,yyyy,1 year,25
+13,control,1995,0.359999999999999987,0.160000000000000003,asian;black;male,yyyy,1 year,25
+13,control,1996,0.384615384615384581,0.282051282051281993,asian;black;male,yyyy,1 year,39
+13,control,1997,0.333333333333333315,0.151515151515151492,asian;black;male,yyyy,1 year,33
+13,control,1998,0.320000000000000007,0.239999999999999991,asian;black;male,yyyy,1 year,25
+13,control,1999,0.500000000000000000,0.125000000000000000,asian;black;male,yyyy,1 year,24
+13,control,2000,0.318181818181818177,0.181818181818181795,asian;black;male,yyyy,1 year,22

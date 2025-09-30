@@ -44,4 +44,4 @@ clear
 set trace off
 set tracedepth 1
 
-undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("g") verbose(250)
+undid_stage_three, dir_path("test_csv_files\stage_three\staggered") agg("time") verbose(250)

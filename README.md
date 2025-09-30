@@ -3,14 +3,16 @@ A framework for estimating difference-in-differences with unpoolable data, based
 
 ![undid schematic](./images/undid_schematic.png)
 
+View the poster from the 2025 Canadian Stata Conference [here!](./images/undid_stata_presentation.pdf)
+
 ## Installation
 ```stata
-net install undid, from("https://raw.githubusercontent.com/ebjamieson97/undid/main/")
+ssc install undid
 ```
+
 ### Update
 ```stata
-ado uninstall undid
-net install undid, from("https://raw.githubusercontent.com/ebjamieson97/undid/main/")
+ssc install undid, replace
 ```
 
 ## Requirements
