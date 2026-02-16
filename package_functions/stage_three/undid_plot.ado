@@ -1,7 +1,7 @@
 /*------------------------------------*/
 /*undid_plot*/
 /*written by Eric Jamieson */
-/*version 2.0.0 2025-02-16 */
+/*version 2.0.1 2025-02-17 */
 /*------------------------------------*/
 cap program drop undid_plot
 program define undid_plot
@@ -487,10 +487,8 @@ real matrix undid_compute_hc_covariance(
         omega_diag = (resid :^ 2) :/ ((1 :- h) :^ delta)
     }
     
-    omega = diag(omega_diag)
-    
     // Sandwich estimator
-    return(XXinv * (x' * omega * x) * XXinv)
+    return(XXinv * cross(x, omega_diag :* x) * XXinv)
 }
 end
 }
@@ -499,6 +497,7 @@ end
 /*--------------------------------------*/
 /* Change Log */
 /*--------------------------------------*/
+*2.0.1 - made the HCCME computation more efficient
 *2.0.0 - changed the args include_silos and omit_silos to only and omit, respectively, to better align with the undid_stage_three Stata function (as well as the R package). Also added hc arg.
 *1.1.0 - now shows which silo-year combinations have missing values of mean_outcome or mean_outcome_residualized before dropping them
 *1.0.0 - created function
