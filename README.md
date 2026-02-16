@@ -1,5 +1,5 @@
 # undid
-A framework for estimating difference-in-differences with unpoolable data, based on [Karim, Webb, Austin, and Strumpf (2024)](https://arxiv.org/abs/2403.15910v2). Supports common or staggered adoption, multiple groups, and the inclusion of covariates. Also computes p-values for the aggregate average treatment effect on the treated via the randomization inference procedure described in [MacKinnon and Webb (2020)](https://doi.org/10.1016/j.jeconom.2020.04.024).
+A framework for estimating difference-in-differences with unpoolable data, based on [Karim, Webb, Austin, and Strumpf (2025)](https://arxiv.org/abs/2403.15910v2). Supports common or staggered adoption, multiple groups, and the inclusion of covariates. Also computes p-values for the aggregate average treatment effect on the treated via the randomization inference procedure described in [MacKinnon and Webb (2020)](https://doi.org/10.1016/j.jeconom.2020.04.024).
 
 ![undid schematic](./images/undid_schematic.png)
 
@@ -52,7 +52,6 @@ Ensure that dates are all entered in the same date format, a list of compatible 
 
 - **filepath** (*string, optional*):  
   A string specifying the path to the folder in which to save the output file. e.g. `` "`c(pwd)'" ``. Defaults to `` "`c(tempdir)'" ``
-
 ```stata
 * For the case of many silos, as is shown here, it may be practical to create the initial 
 * CSV file in Excel, Sheets, or any other similar program.
@@ -80,7 +79,6 @@ undid_init , ///
 				   filepath("`c(pwd)'")
 
 init.csv saved to: C:\Users\Eric Bruce Jamieson\Documents\My Cool undid Files\init.csv
-
 ```
 
 #### 2. `undid_diff` - Creates the CSV file to be sent out to each silo (`empty_diff_df.csv`) and displays its filepath
@@ -114,7 +112,6 @@ Creates the `empty_diff_df.csv` which lists all of the differences that need to 
 
 - **filepath** (*string, optional*):  
   A string specifying the path to the folder in which to save the output file, e.g. `` "`c(pwd)'" ``. Defaults to `` "`c(tempdir)'" ``.
-
 ```stata
 undid_diff, filepath("C:/Users/Eric Bruce Jamieson/Documents/My Cool undid Files/init.csv") date_format("yyyy") freq("year")
 
@@ -145,7 +142,7 @@ Ensure that the local silo data is loaded as Stata's active dataset before runni
 - **time_column** (*varname*):  
   A string which indicates the name of the variable in the local silo data which contains the date information. This variable should be a string. 
 
-- **outcome_column** (*varname):  
+- **outcome_column** (*varname*):  
   A string specifying the name of the variable in the local silo data which contains the outcome of interest.
 
 - **silo_date_format** (*string*):  
@@ -163,7 +160,6 @@ Ensure that the local silo data is loaded as Stata's active dataset before runni
 
 - **anonymize_size** (*int, optional*):
   An integer which defines to the value to be rounded to should **anonymize_size** be toggled on. Defaults to 5. 
-
 ```stata
 * An analogous script would be run at each silo 
 use "tests\\test_dta_files\\State71.dta", clear
@@ -200,14 +196,14 @@ For common adoption scenarios, the valid aggregation methods are `"silo"` and `"
 - **covariates** (*int, optional*):  
   An integer, either 0 (false) or 1 (true) which specifies whether to use the `diff_estimate` (0) or the `diff_estimate_covariates` (1) column when computing the aggregate ATT. Defaults to 0.
 
-- **use_pre_controls** (*int, optional*):
+- **notyet** (*int, optional*):
   An integer, either 0 (false) or 1 (true). If set to true, computations will use contrasts (diffs) from pre-treatment periods of treatment silos as controls where applicable. Defaults to 0 (false).
 
 - **nperm** (*int, optional*):
-  An integer, defines the number of random permutations to consider for the randomization inference procedure. Defaults to 1000. 
+  An integer, defines the number of random permutations to consider for the randomization inference procedure. Defaults to 999. 
 
 - **verbose** (*int, optional*):
-  An integer, either 0 (false) or 1 (true), which if set to 1 (true) will display progress messages as the randomization inference procedure is being executed. Defaults to 1 (true).
+  An integer value that controls progress reporting frequency during the randomization inference procedure. When set to a positive integer N, progress updates will be displayed every N permutations. Setting to 0 disables the progress messages. Defaults to 250.
 
 - **seed** (*int, optional*):
   An integer which allows you to set the seed for the randomization inference procedure. If set to 0, does not set a seed. Defaults to 0.
@@ -218,27 +214,37 @@ For common adoption scenarios, the valid aggregation methods are `"silo"` and `"
 - **check_anon_size** (*int, optional*):
   An integer, either 0 (false) or 1 (true), which if toggled on, displays which silos enabled the 'anonymize_weights' argument in stage two, and the respective 'anonymize_size' values. Defaults to 0.
 
+- **hc** (*int, optional*):
+  An integer, either 0, 1, 2, 3, or 4, which specifies the heteroskedasticity-consistent covariance matrix estimator (HCCME) to use. Defaults to 3.
+
+- **omit** (*string, optional*):
+  Silo names separated by spaces, indicating any silos to omit from the analysis.
+
+- **only** (*string, optional*):
+  Silo names separated by spaces, indicating to only include these silos in the analysis.
 ```stata
 undid_stage_three, dir_path("C:/Users/User/Documents/Files From Silos")
-
+Completed 250 of 999 permutations! 
+Completed 500 of 999 permutations! 
+Completed 750 of 999 permutations! 
 -----------------------------------------------------------------------------------------------------
                                      undid: Sub-Aggregate Results                    
 -----------------------------------------------------------------------------------------------------
 Sub-Aggregate Group       | ATT             | SE     | p-val  | JKNIFE SE  | JKNIFE p-val | RI p-val
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1991                      |0.0529100        | 0.022  | 0.017  | 0.024      | 0.030        |0.519    |
+1991                      |0.0529100        | 0.024  | 0.031  | .          | .            |0.525    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1993                      |0.0235928        | 0.017  | 0.155  | 0.019      | 0.204        |0.701    |
+1993                      |0.0235928        | 0.019  | 0.204  | .          | .            |0.685    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1996                      |0.0564351        | 0.024  | 0.021  | 0.029      | 0.057        |0.473    |
+1996                      |0.0564351        | 0.030  | 0.057  | .          | .            |0.505    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1997                      |0.0711167        | 0.023  | 0.002  | 0.027      | 0.009        |0.203    |
+1997                      |0.0711167        | 0.027  | 0.009  | 0.026      | 0.008        |0.208    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1998                      |0.0485436        | 0.033  | 0.143  | 0.039      | 0.213        |0.497    |
+1998                      |0.0485436        | 0.039  | 0.215  | 0.084      | 0.565        |0.484    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-1999                      |0.0120440        | 0.015  | 0.424  | 0.021      | 0.561        |0.876    |
+1999                      |0.0120440        | 0.021  | 0.563  | .          | .            |0.868    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
-2000                      |-0.0330623       | 0.032  | 0.308  | 0.096      | 0.732        |0.705    |
+2000                      |-0.0330623       | 0.098  | 0.736  | 0.097      | 0.734        |0.687    |
 --------------------------|-----------------|--------|--------|------------|--------------|---------|
 
 ------------------------------
@@ -247,49 +253,51 @@ Sub-Aggregate Group       | ATT             | SE     | p-val  | JKNIFE SE  | JKN
 Aggregation: g
 Weighting: both
 Aggregate ATT: .04582252
-Standard error: .01159691
-p-value: .00752668
-Jackknife SE: .01329357
-Jackknife p-value: .01368368
-RI p-value: .13
-Permutations: 1000
+Standard error: .01440005
+p-value: .01902511
+Jackknife SE: .01520398
+Jackknife p-value: .00404305
+RI p-value: .14614615
+Permutations: 999
+
 
 . matrix list r(undid)
 
 r(undid)[7,7]
               ATT           SE         pval    JKNIFE_SE  JKNIFE_pval      RI_pval            W
-1991    .05290996    .02211803    .01719025    .02436901    .03047674         .519    .20179564
-1993    .02359277    .01657012    .15543384     .0185242    .20368142         .701    .19153484
-1996    .05643511    .02422739    .02079763    .02943819    .05659252         .473    .07567336
-1997    .07111675    .02296333    .00228761    .02697387    .00914768         .203    .32107738
-1998    .04854361     .0329081    .14265341    .03876623    .21277512         .497    .10859342
-1999    .01204398    .01497416    .42353915     .0206109    .56056965         .876    .03548525
-2000   -.03306235    .03203586    .30810225     .0958573    .73188176         .705     .0658401
+1991    .05290996    .02439807    .03067544            .            .    .52452452    .20179564
+1993    .02359277    .01855183    .20435664            .            .    .68468468    .19153484
+1996    .05643511    .02950858    .05718608            .            .     .5045045    .07567336
+1997    .07111675    .02705265    .00935306    .02574683    .00801206    .20820821    .32107738
+1998    .04854361    .03891876    .21458048    .08378975    .56495417    .48448448    .10859342
+1999    .01204398    .02073484    .56292977            .            .    .86786787    .03548525
+2000   -.03306235    .09756409    .73643097    .09660284    .73359709    .68668669     .0658401
+
 
 . di r(att)
 .04582252
 
 . di r(se)
-.01159691
+.01440005
 
 . di r(p)
-.00752668
+.01902511
 
 . di r(jkse)
-.01329357
+.01520398
 
 . di r(jkp)
-.01368368
+.00404305
 
 . di r(rip)
-.13
+.14614615
 
-. di r(perms)
-1000
 
+. di r(nperm)
+999
 ```
 
-#### 7. `undid_plot` - Plots parallel trends figures or event study plots
+#### 5. `undid_plot` - Plots parallel trends figures or event study plots
 
 Combines all of the `trends_data_silo_name.csv` files and uses this data to plot parallel trends figures or event study plots.
 
@@ -307,10 +315,10 @@ Combines all of the `trends_data_silo_name.csv` files and uses this data to plot
 - **covariates** (*int, optional*):
   either 1 (true) or 0 (false), which specifies whether to use the `mean_outcome` column or the `mean_outcome_residualized` column from the trends data CSV files while plotting. Setting to 0 (false) selects the `mean_outcome` column and 1 (true) selects the `mean_outcome_residualized` column. Defaults to 0 (false).
 
-- **omit_silos** (*string, optional*):
+- **omit** (*string, optional*):
   Silo names separated by spaces, indicating any silos to omit from the plot.
 
-- **include_silos** (*string, optional*):
+- **only** (*string, optional*):
   Silo names separated by spaces, indicating to only include these silos in the plot.
 
 - **treated_colours** (*string, optional*):
@@ -325,6 +333,8 @@ Combines all of the `trends_data_silo_name.csv` files and uses this data to plot
 - **event_window** (*numlist, optional*):
   If supplied, determines the periods before (the first value) and the periods after (the second value) the event that should be included in the plot.
 
+- **hc** (*int, optional*):
+  An integer, either 0, 1, 2, 3, or 4, which specifies the heteroskedasticity-consistent covariance matrix estimator (HCCME) to use for event study standard errors. Defaults to 3.
 ```stata
 undid_plot, dir_path("C:/Users/User/Documents/Files From Silos") plot("event") ci(0.90) event_window(-7 7)
 ```
